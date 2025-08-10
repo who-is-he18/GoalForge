@@ -59,7 +59,7 @@ class RegisterResource(Resource):
         db.session.commit()
 
         # Auto-login: generate JWT token
-        access_token = create_access_token(identity=user.id)
+        access_token = create_access_token(identity=str(user.id))
 
         return {
             "message": "User registered successfully.",
@@ -97,7 +97,7 @@ class LoginResource(Resource):
             return {"message": "Invalid email or password."}, 401
 
         # Generate JWT token (valid for 1 day)
-        access_token = create_access_token(identity=user.id, expires_delta=timedelta(days=1))
+        access_token = create_access_token(identity=str(user.id), expires_delta=timedelta(days=20))
 
         return {
             "message": "Login successful.",

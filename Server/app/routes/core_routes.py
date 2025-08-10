@@ -392,16 +392,17 @@ class FollowerListResource(Resource):
     def post(self):
         parser = reqparse.RequestParser()
         parser.add_argument('follower_id', type=int, required=True)
-        parser.add_argument('followed_id', type=int, required=True)
+        parser.add_argument('followed_goal_id', type=int, required=True)  # match model
         args = parser.parse_args()
 
         follower = Follower(
-            follower_id=args['follower_id'],
-            followed_id=args['followed_id']
+        follower_id=args['follower_id'],
+        followed_goal_id=args['followed_goal_id']
         )
         db.session.add(follower)
         db.session.commit()
         return follower_schema.dump(follower), 201
+
 
 class FollowerResource(Resource):
     """Resource for retrieving, updating, or deleting a single follower."""
@@ -468,7 +469,7 @@ class NotificationResource(Resource):
         parser.add_argument('user_id', type=int)
         parser.add_argument('type', type=str)
         parser.add_argument('reference_id', type=int)
-        parser.add_argument('is_read', type=bool)
+        parser.add_argument('is_read', type=lambda x: str(x).lower() == 'true')
         args = parser.parse_args()
 
         # Update only provided fields
