@@ -61,4 +61,3 @@ def register_routes(api):
     api.add_resource(GoalResource, '/api/goals/<int:goal_id>')     # Individual goal ops
     api.add_resource(GoalProgressListResource, '/api/progress')    # List/create progress
     api.add_resource(GoalProgressResource, '/api/progress/<int:progress_id>')  # Progress ops
-
