@@ -5,6 +5,7 @@ import Login from "./Pages/Login";
 import Signup from "./Pages/SignUp";
 import Logout from "./Pages/Logout";
 import MyGoals from "./Pages/MyGoals";
+import CreateGoalPage from "./Pages/CreateGoal";
 
 
 function App() {
@@ -36,6 +37,7 @@ function App() {
         <Route path="/signup" element={<Signup onSignup={handleSignup} onSwitchToLogin={() => setView("login")} />} />
         <Route path="/logout" element={<Logout onLogout={handleLogout} />} />
         <Route path="/my-goals" element={<MyGoals currentUser={currentUser} />} />
+        <Route path="/create-goal" element={<CreateGoalPage />} />
       </Routes>
     </Router>
   )
