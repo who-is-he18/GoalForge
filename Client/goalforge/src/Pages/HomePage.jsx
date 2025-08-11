@@ -225,10 +225,12 @@ export default function GoalForgeHome() {
       <TargetIcon />
       <span className="hidden sm:inline">My Goals</span>
     </Link>
-              <button className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md shadow hover:bg-gray-900 transition-colors">
-                <PlusIcon />
+<Link
+      to="/create-goal"
+      className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md shadow hover:bg-white-100 transition-colors"
+    >                <PlusIcon />
                 <span className="hidden sm:inline">Create Goal</span>
-            </button>
+              </Link>
              <button className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-md shadow hover:bg-gray-100 transition-colors">
                 <LogoutIcon />
                 <span className="hidden sm:inline">Logout</span>
