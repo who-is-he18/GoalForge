@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+
 
 const UserIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -216,10 +218,13 @@ export default function GoalForgeHome() {
                 <UserIcon />
                 <span className="hidden sm:inline">Profile</span>
               </button>
-             <button className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-md shadow hover:bg-gray-100 transition-colors">
-                <TargetIcon />
-                <span className="hidden sm:inline">My Goals</span>
-              </button>
+              <Link
+      to="/my-goals"
+      className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-md shadow hover:bg-gray-100 transition-colors"
+    >
+      <TargetIcon />
+      <span className="hidden sm:inline">My Goals</span>
+    </Link>
               <button className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md shadow hover:bg-gray-900 transition-colors">
                 <PlusIcon />
                 <span className="hidden sm:inline">Create Goal</span>
