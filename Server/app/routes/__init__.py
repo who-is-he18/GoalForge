@@ -14,7 +14,13 @@ from .core_routes import (
     UserBadgeListResource,      # Handles user-badge endpoints
     NotificationListResource,   # Handles notification endpoints
     GoalResource,               # Handles individual goal operations
-    GoalProgressResource        # Handles individual goal progress operations
+    GoalProgressResource,        # Handles individual goal progress operations
+    CommentResource,         # Handles individual comment operations
+    CheerResource,           # Handles individual cheer operations
+    BadgeResource,           # Handles individual badge operations
+    UserBadgeResource,       # Handles individual user-badge operations
+    FollowerResource,        # Handles individual follower operations
+    NotificationResource       # Handles individual notification operations
 )
 
 # Authentication and user management endpoints
@@ -48,16 +54,25 @@ def register_routes(api):
 
     # Social features
     api.add_resource(FollowerListResource, '/followers')           # Manage followers
-    api.add_resource(CheerListResource, '/cheers')                 # Send/receive cheers
+    api.add_resource(FollowerResource, '/followers/<int:follower_id>')
+    api.add_resource(CheerListResource, '/cheers')                    # All cheers
+    api.add_resource(CheerResource, '/cheers/<int:cheer_id>')          # Single cheer
     api.add_resource(CommentListResource, '/comments')             # Add/view comments
+    api.add_resource(CommentResource, '/comments/<int:comment_id>')     # Single comment
+
 
     # Badge and notification endpoints
-    api.add_resource(BadgeListResource, '/badges')                 # Badge management
-    api.add_resource(UserBadgeListResource, '/user-badges')        # Assign/view user badges
+    api.add_resource(BadgeListResource, '/badges')                    # All badges
+    api.add_resource(BadgeResource, '/badges/<int:badge_id>')          # Single badge
+    api.add_resource(UserBadgeListResource, '/user-badges')                     # All user badges
+    api.add_resource(UserBadgeResource, '/user-badges/<int:user_badge_id>')     # Single user badge
     api.add_resource(NotificationListResource, '/notifications')   # Notification management
+    api.add_resource(NotificationResource, '/notifications/<int:notification_id>')
+
 
     # Goal and progress endpoints
     api.add_resource(GoalListResource, '/api/goals')               # List/create goals
     api.add_resource(GoalResource, '/api/goals/<int:goal_id>')     # Individual goal ops
     api.add_resource(GoalProgressListResource, '/api/progress')    # List/create progress
     api.add_resource(GoalProgressResource, '/api/progress/<int:progress_id>')  # Progress ops
+

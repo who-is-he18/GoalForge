@@ -1,10 +1,13 @@
 import React, { useState } from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import GoalForgeHome from "./Pages/HomePage";
 import Login from "./Pages/Login";
 import Signup from "./Pages/SignUp";
 import Logout from "./Pages/Logout";
 
-export default function App() {
-  const [currentUser, setCurrentUser] = useState(null);
+
+function App() {
+     const [currentUser, setCurrentUser] = useState(null);
   const [view, setView] = useState("login"); 
 
   const handleLogin = (email) => {
@@ -41,4 +44,17 @@ export default function App() {
       {view === "logout" && <Logout onLogout={handleLogout} />}
     </div>
   );
+
+    <Router>
+      <Routes>
+        <Route path="/home" element={<GoalForgeHome />} />
+      </Routes>
+    </Router>
+
 }
+
+export default App;
+
+
+ 
+

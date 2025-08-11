@@ -21,13 +21,20 @@ goal_schema = GoalSchema()                   # Single goal
 goals_schema = GoalSchema(many=True)         # Multiple goals
 progress_schema = GoalProgressSchema(many=True)
 progress_single_schema = GoalProgressSchema()
-user_schema = UserSchema(many=True)
-comment_schema = CommentSchema(many=True)
-cheer_schema = CheerSchema(many=True)
-badge_schema = BadgeSchema(many=True)
-user_badge_schema = UserBadgeSchema(many=True)
-follower_schema = FollowerSchema(many=True)
-notification_schema = NotificationSchema(many=True)
+user_schema = UserSchema()                   # Single user
+users_schema = UserSchema(many=True)         # Multiple users
+comment_schema = CommentSchema()             # Single comment
+comments_schema = CommentSchema(many=True)   # Multiple comments
+cheer_schema = CheerSchema()                 # Single cheer
+cheers_schema = CheerSchema(many=True)       # Multiple cheers
+badge_schema = BadgeSchema()                 # Single badge
+badges_schema = BadgeSchema(many=True)       # Multiple badges
+user_badge_schema = UserBadgeSchema()        # Single user badge
+user_badges_schema = UserBadgeSchema(many=True) # Multiple user badges
+follower_schema = FollowerSchema()           # Single follower
+followers_schema = FollowerSchema(many=True) # Multiple followers
+notification_schema = NotificationSchema()   # Single notification
+notifications_schema = NotificationSchema(many=True) # Multiple notifications
 
 # ------------------- User Resources -------------------
 
@@ -35,7 +42,7 @@ class UserListResource(Resource):
     """Resource for listing all users."""
     def get(self):
         users = User.query.all()
-        return user_schema.dump(users), 200
+        return users_schema.dump(users), 200
 
 # ------------------- Goal Resources -------------------
 
@@ -179,34 +186,303 @@ class CommentListResource(Resource):
     """Resource for listing all comments."""
     def get(self):
         comments = Comment.query.all()
-        return comment_schema.dump(comments), 200
+        return comments_schema.dump(comments), 200
+    
+    @jwt_required()
+    def post(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('user_id', type=int, required=True)
+        parser.add_argument('goal_progress_id', type=int, required=True)
+        parser.add_argument('content', required=True)
+        args = parser.parse_args()
+
+        comment = Comment(
+            user_id=args['user_id'],
+            goal_progress_id=args['goal_progress_id'],
+            content=args['content']
+        )
+        db.session.add(comment)
+        db.session.commit()
+        return comment_schema.dump(comment), 201
+    
+class CommentResource(Resource):
+    """Resource for retrieving, updating, or deleting a single comment."""
+    def get(self, comment_id):
+        comment = Comment.query.get_or_404(comment_id)
+        return comment_schema.dump(comment), 200
+
+    @jwt_required()
+    def put(self, comment_id):
+        comment = Comment.query.get_or_404(comment_id)
+        parser = reqparse.RequestParser()
+        parser.add_argument('content')
+        args = parser.parse_args()
+
+        # Update only provided fields
+        for attr, value in args.items():
+            if value is not None:
+                setattr(comment, attr, value)
+
+        db.session.commit()
+        return comment_schema.dump(comment), 200
+
+    @jwt_required()
+    def delete(self, comment_id):
+        comment = Comment.query.get_or_404(comment_id)
+        db.session.delete(comment)
+        db.session.commit()
+        return {"message": "Comment deleted"}, 200
 
 class CheerListResource(Resource):
     """Resource for listing all cheers."""
     def get(self):
         cheers = Cheer.query.all()
-        return cheer_schema.dump(cheers), 200
+        return cheers_schema.dump(cheers), 200
+
+    @jwt_required()
+    def post(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('user_id', type=int, required=True)
+        parser.add_argument('goal_progress_id', type=int, required=True)
+        args = parser.parse_args()
+
+        cheer = Cheer(
+            user_id=args['user_id'],
+            goal_progress_id=args['goal_progress_id']
+        )
+        db.session.add(cheer)
+        db.session.commit()
+        return cheer_schema.dump(cheer), 201
+
+class CheerResource(Resource):
+    """Resource for retrieving, updating, or deleting a single cheer."""
+    def get(self, cheer_id):
+        cheer = Cheer.query.get_or_404(cheer_id)
+        return cheer_schema.dump(cheer), 200
+    
+    @jwt_required()
+    def put(self, cheer_id):
+        cheer = Cheer.query.get_or_404(cheer_id)
+        parser = reqparse.RequestParser()
+        parser.add_argument('user_id', type=int)
+        parser.add_argument('goal_progress_id', type=int)
+        args = parser.parse_args()
+
+        # Update only provided fields
+        for attr, value in args.items():
+            if value is not None:
+                setattr(cheer, attr, value)
+
+        db.session.commit()
+        return cheer_schema.dump(cheer), 200
+
+    @jwt_required()
+    def delete(self, cheer_id):
+        cheer = Cheer.query.get_or_404(cheer_id)
+        db.session.delete(cheer)
+        db.session.commit()
+        return {"message": "Cheer deleted"}, 200
 
 class BadgeListResource(Resource):
     """Resource for listing all badges."""
     def get(self):
         badges = Badge.query.all()
-        return badge_schema.dump(badges), 200
+        return badges_schema.dump(badges), 200
+    
+    @jwt_required()
+    def post(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('name', required=True)
+        parser.add_argument('description', required=True)
+        args = parser.parse_args()
+
+        badge = Badge(
+            name=args['name'],
+            description=args['description']
+        )
+        db.session.add(badge)
+        db.session.commit()
+        return badge_schema.dump(badge), 201
+
+class BadgeResource(Resource):
+    """Resource for retrieving, updating, or deleting a single badge."""
+    def get(self, badge_id):
+        badge = Badge.query.get_or_404(badge_id)
+        return badge_schema.dump(badge), 200
+    @jwt_required()
+    def put(self, badge_id):
+        badge = Badge.query.get_or_404(badge_id)
+        parser = reqparse.RequestParser()
+        parser.add_argument('name')
+        parser.add_argument('description')
+        args = parser.parse_args()
+
+        # Update only provided fields
+        for attr, value in args.items():
+            if value is not None:
+                setattr(badge, attr, value)
+
+        db.session.commit()
+        return badge_schema.dump(badge), 200
+
+    @jwt_required()
+    def delete(self, badge_id):
+        badge = Badge.query.get_or_404(badge_id)
+        db.session.delete(badge)
+        db.session.commit()
+        return {"message": "Badge deleted"}, 200
 
 class UserBadgeListResource(Resource):
     """Resource for listing all user badges."""
     def get(self):
         user_badges = UserBadge.query.all()
-        return user_badge_schema.dump(user_badges), 200
+        return user_badges_schema.dump(user_badges), 200
+
+    @jwt_required()
+    def post(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('user_id', type=int, required=True)
+        parser.add_argument('badge_id', type=int, required=True)
+        args = parser.parse_args()
+
+        user_badge = UserBadge(
+            user_id=args['user_id'],
+            badge_id=args['badge_id']
+        )
+        db.session.add(user_badge)
+        db.session.commit()
+        return user_badge_schema.dump(user_badge), 201
+    
+class UserBadgeResource(Resource):
+    """Resource for retrieving, updating, or deleting a single user badge."""
+    def get(self, user_badge_id):
+        user_badge = UserBadge.query.get_or_404(user_badge_id)
+        return user_badge_schema.dump(user_badge), 200
+    
+    @jwt_required()
+    def put(self, user_badge_id):
+        user_badge = UserBadge.query.get_or_404(user_badge_id)
+        parser = reqparse.RequestParser()
+        parser.add_argument('user_id', type=int)
+        parser.add_argument('badge_id', type=int)
+        args = parser.parse_args()
+
+        # Update only provided fields
+        for attr, value in args.items():
+            if value is not None:
+                setattr(user_badge, attr, value)
+
+        db.session.commit()
+        return user_badge_schema.dump(user_badge), 200
+
+    @jwt_required()
+    def delete(self, user_badge_id):
+        user_badge = UserBadge.query.get_or_404(user_badge_id)
+        db.session.delete(user_badge)
+        db.session.commit()
+        return {"message": "User badge deleted"}, 200
 
 class FollowerListResource(Resource):
     """Resource for listing all followers."""
     def get(self):
         followers = Follower.query.all()
-        return follower_schema.dump(followers), 200
+        return followers_schema.dump(followers), 200
+    
+    @jwt_required()
+    def post(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('follower_id', type=int, required=True)
+        parser.add_argument('followed_goal_id', type=int, required=True)  # match model
+        args = parser.parse_args()
+
+        follower = Follower(
+        follower_id=args['follower_id'],
+        followed_goal_id=args['followed_goal_id']
+        )
+        db.session.add(follower)
+        db.session.commit()
+        return follower_schema.dump(follower), 201
+
+
+class FollowerResource(Resource):
+    """Resource for retrieving, updating, or deleting a single follower."""
+    def get(self, follower_id):
+        follower = Follower.query.get_or_404(follower_id)
+        return follower_schema.dump(follower), 200
+    
+    @jwt_required()
+    def put(self, follower_id):
+        follower = Follower.query.get_or_404(follower_id)
+        parser = reqparse.RequestParser()
+        parser.add_argument('follower_id', type=int)
+        parser.add_argument('followed_id', type=int)
+        args = parser.parse_args()
+
+        # Update only provided fields
+        for attr, value in args.items():
+            if value is not None:
+                setattr(follower, attr, value)
+
+        db.session.commit()
+        return follower_schema.dump(follower), 200
+
+    @jwt_required()
+    def delete(self, follower_id):
+        follower = Follower.query.get_or_404(follower_id)
+        db.session.delete(follower)
+        db.session.commit()
+        return {"message": "Follower deleted"}, 200
 
 class NotificationListResource(Resource):
     """Resource for listing all notifications."""
     def get(self):
         notifications = Notification.query.all()
-        return notification_schema.dump(notifications), 200
+        return notifications_schema.dump(notifications), 200
+    
+    @jwt_required()
+    def post(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('user_id', type=int, required=True)
+        parser.add_argument('type', type=str, required=True)
+        parser.add_argument('reference_id', type=int)
+        args = parser.parse_args()
+
+        notification = Notification(
+            user_id=args['user_id'],
+            type=args['type'],
+            reference_id=args['reference_id']
+        )
+        db.session.add(notification)
+        db.session.commit()
+        return notification_schema.dump(notification), 201
+
+class NotificationResource(Resource):
+    """Resource for retrieving, updating, or deleting a single notification."""
+    def get(self, notification_id):
+        notification = Notification.query.get_or_404(notification_id)
+        return notification_schema.dump(notification), 200
+    
+    @jwt_required()
+    def put(self, notification_id):
+        notification = Notification.query.get_or_404(notification_id)
+        parser = reqparse.RequestParser()
+        parser.add_argument('user_id', type=int)
+        parser.add_argument('type', type=str)
+        parser.add_argument('reference_id', type=int)
+        parser.add_argument('is_read', type=lambda x: str(x).lower() == 'true')
+        args = parser.parse_args()
+
+        # Update only provided fields
+        for attr, value in args.items():
+            if value is not None:
+                setattr(notification, attr, value)
+
+        db.session.commit()
+        return notification_schema.dump(notification), 200
+    
+    @jwt_required()
+    def delete(self, notification_id):
+        notification = Notification.query.get_or_404(notification_id)
+        db.session.delete(notification)
+        db.session.commit()
+        return {"message": "Notification deleted"}, 200
