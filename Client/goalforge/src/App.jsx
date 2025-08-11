@@ -26,31 +26,17 @@ function App() {
   };
 
   return (
-    <div>
-      {view === "login" && (
-        <Login
-          onLogin={handleLogin}
-          onSwitchToSignup={() => setView("signup")}
-        />
-      )}
-
-      {view === "signup" && (
-        <Signup
-          onSignup={handleSignup}
-          onSwitchToLogin={() => setView("login")}
-        />
-      )}
-
-      {view === "logout" && <Logout onLogout={handleLogout} />}
-    </div>
-  );
+    
 
     <Router>
       <Routes>
         <Route path="/home" element={<GoalForgeHome />} />
+        <Route path="/" element={<Login onLogin={handleLogin} onSwitchToSignup={() => setView("signup")} />} />
+        <Route path="/signup" element={<Signup onSignup={handleSignup} onSwitchToLogin={() => setView("login")} />} />
+        <Route path="/logout" element={<Logout onLogout={handleLogout} />} />
       </Routes>
     </Router>
-
+  )
 }
 
 export default App;

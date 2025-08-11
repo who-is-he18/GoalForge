@@ -1,6 +1,7 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-export default function Login({ onLogin, onSwitchToSignup }) {
+export default function Login({ onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -9,7 +10,11 @@ export default function Login({ onLogin, onSwitchToSignup }) {
     e.preventDefault();
     onLogin(email);
   };
+const navigate = useNavigate();
 
+const onSwitchToSignup = () => {
+  navigate("/signup");
+};
   return (
    <div className="flex min-h-screen items-center justify-center bg-gray-100">
   <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-lg">

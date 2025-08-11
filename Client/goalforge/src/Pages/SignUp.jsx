@@ -1,6 +1,7 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-export default function Signup({ onSignup, onSwitchToLogin }) {
+export default function Signup({ onSignup }) {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,8 +23,13 @@ export default function Signup({ onSignup, onSwitchToLogin }) {
       return;
     }
     onSignup(username);
-  };
 
+  };
+const navigate = useNavigate();
+
+const onSwitchToLogin = () => {
+  navigate("/");
+};
   return (
     <div>
       <h1>GoalForge</h1>
