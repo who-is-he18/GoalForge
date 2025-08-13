@@ -67,7 +67,7 @@ const onSwitchToSignup = () => {
     </form>
 
     <div className="flex justify-between mt-4 text-sm text-black">
-      <a href="/forgotpassword" className="hover:underline">
+      <a href="/forgot-password" className="hover:underline">
         Forgot password?
       </a>
       <button

@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+
 
 const UserIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -37,7 +39,7 @@ const MoonIcon = () => (
 );
 
 const SearchIcon = () => (
-  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
     <line x1="16.65" y1="16.65" x2="21" y2="21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
   </svg>
@@ -52,7 +54,7 @@ const FlameIcon = () => (
 
 const Avatar = ({ src, name }) => (
   <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
-    {src ? <img src={src} alt={name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-sm text-gray-600">{name?.[0] || "G"}</div>}
+    {src ? <img src={src} alt={name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-sm text-black">{name?.[0] || "G"}</div>}
   </div>
 );
 
@@ -76,57 +78,215 @@ const initialDummyGoals = [
     author: "Emma Davis",
     handle: "@emma_writes",
     title: "Write 500 Words Daily",
+    description: "Daily short-form writing to build a habit. Focus: short stories and microfiction.",
+    category: "Health",
+    frequency: "daily",
+    start_date: "2025-07-15",
+    end_date: "2025-08-14",
     tag: "Habit",
     timeAgo: "205d ago",
     content: "Just hit my 500-word target for today! Working on a short story about time travel. Writing has become such a therapeutic part of my routine.",
-    image: null, // replace with url when available
+    image: "https://images.unsplash.com/photo-1519681393784-d120267933ba",
     streak: "8 day streak",
     totalDays: 31,
     createdAt: "2025-02-01T08:30:00Z",
     likes: 56,
     comments: 4,
     liked: false,
+    progress_logs: [
+      {
+        id: 101,
+        goal_id: 1,
+        date: "2025-08-01",
+        note: "Wrote 500 words on a time-travel story. Experimented with unreliable narrator.",
+        media_url: "https://images.unsplash.com/photo-1519681393784-d120267933ba", // notebook
+        xp_earned: 10,
+        created_at: "2025-08-01T10:00:00Z"
+      },
+      {
+        id: 102,
+        goal_id: 1,
+        date: "2025-08-02",
+        note: "Rewrote opening. Hit 600 words. Felt energized.",
+        media_url: "https://images.unsplash.com/photo-1507842217343-583bb7270b66", // laptop writing
+        xp_earned: 10,
+        created_at: "2025-08-02T09:30:00Z"
+      }
+    ]
   },
   {
     id: 2,
-    author: "Marcus Lee",
-    handle: "@mlee_keto",
-    title: "30-Day Keto",
-    tag: "Health",
-    timeAgo: "12d ago",
-    content: "Down 4kg and feeling energetic. Sharing weekly meal templates and progress photos.",
-    image: null,
-    streak: "12 day streak",
-    totalDays: 12,
-    createdAt: "2025-07-28T09:00:00Z",
-    likes: 18,
-    comments: 2,
-    liked: false,
+    author: "Liam Carter",
+    handle: "@liam_lifts",
+    title: "Morning Workout Challenge",
+    description: "30 minutes of strength training every morning before breakfast.",
+    category: "Fitness",
+    frequency: "daily",
+    start_date: "2025-06-01",
+    end_date: "2025-07-01",
+    tag: "Discipline",
+    timeAgo: "180d ago",
+    content: "Feeling stronger every day. Today’s set was tough but worth it!",
+    image: "https://images.unsplash.com/photo-1599058917212-d750089bc07c",
+    streak: "15 day streak",
+    totalDays: 30,
+    createdAt: "2025-01-15T07:15:00Z",
+    likes: 89,
+    comments: 12,
+    liked: true,
+    progress_logs: [
+      {
+        id: 201,
+        goal_id: 2,
+        date: "2025-06-10",
+        note: "Did push, pull, legs circuit. Increased deadlift weight by 5kg.",
+        media_url: "https://images.unsplash.com/photo-1583454110559-21d2a29a7e66", // lifting weights
+        xp_earned: 15,
+        created_at: "2025-06-10T08:00:00Z"
+      },
+      {
+        id: 202,
+        goal_id: 2,
+        date: "2025-06-11",
+        note: "Focused on upper body strength. Added extra push-ups to cooldown.",
+        media_url: "https://images.unsplash.com/photo-1594737625785-c5c4b8a3c3c2", // push-ups
+        xp_earned: 15,
+        created_at: "2025-06-11T07:45:00Z"
+      }
+    ]
   },
   {
     id: 3,
-    author: "Sofia Martinez",
-    handle: "@sofiabakes",
-    title: "Daily Bread Experiment",
-    tag: "Hobby",
-    timeAgo: "3d ago",
-    content: "Tried sourdough again — this time the crumb opened up perfectly. Posting recipe tweaks tomorrow!",
-    image: null,
-    streak: "3 day streak",
-    totalDays: 15,
-    createdAt: "2025-08-06T14:20:00Z",
-    likes: 42,
-    comments: 7,
+    author: "Sophia Nguyen",
+    handle: "@sophia_reads",
+    title: "Read 20 Pages a Day",
+    description: "Daily reading habit to explore classic literature and new releases.",
+    category: "Learning",
+    frequency: "daily",
+    start_date: "2025-05-05",
+    end_date: "2025-06-04",
+    tag: "Growth",
+    timeAgo: "150d ago",
+    content: "Finished another chapter of ‘Pride and Prejudice’—Jane Austen is brilliant!",
+    image: "https://images.unsplash.com/photo-1512820790803-83ca734da794",
+    streak: "21 day streak",
+    totalDays: 31,
+    createdAt: "2025-01-10T09:00:00Z",
+    likes: 73,
+    comments: 8,
     liked: false,
+    progress_logs: [
+      {
+        id: 301,
+        goal_id: 3,
+        date: "2025-05-15",
+        note: "Read 25 pages of ‘1984’. Orwell’s world-building is intense.",
+        media_url: "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f", // open book
+        xp_earned: 12,
+        created_at: "2025-05-15T19:00:00Z"
+      },
+      {
+        id: 302,
+        goal_id: 3,
+        date: "2025-05-16",
+        note: "Started ‘To Kill a Mockingbird’. Loving the narrative voice.",
+        media_url: "https://images.unsplash.com/photo-1507842217343-583bb7270b66", // reading desk
+        xp_earned: 12,
+        created_at: "2025-05-16T18:45:00Z"
+      }
+    ]
   },
-];
+  {
+    id: 4,
+    author: "Ethan Brooks",
+    handle: "@ethan_codes",
+    title: "Learn JavaScript in 60 Days",
+    description: "Commit to coding at least 1 hour daily. Goal: Build a full-stack app.",
+    category: "Career",
+    frequency: "daily",
+    start_date: "2025-04-10",
+    end_date: "2025-06-09",
+    tag: "Skill",
+    timeAgo: "120d ago",
+    content: "Debugged my first API call today—felt like magic when it finally worked!",
+    image: "https://images.unsplash.com/photo-1518779578993-ec3579fee39f",
+    streak: "10 day streak",
+    totalDays: 60,
+    createdAt: "2025-01-05T11:20:00Z",
+    likes: 102,
+    comments: 15,
+    liked: true,
+    progress_logs: [
+      {
+        id: 401,
+        goal_id: 4,
+        date: "2025-04-15",
+        note: "Learned JavaScript array methods—map, filter, reduce.",
+        media_url: "https://images.unsplash.com/photo-1555066931-4365d14bab8c", // code screen
+        xp_earned: 20,
+        created_at: "2025-04-15T14:30:00Z"
+      },
+      {
+        id: 402,
+        goal_id: 4,
+        date: "2025-04-16",
+        note: "Built a small to-do app. Practiced DOM manipulation.",
+        media_url: "https://images.unsplash.com/photo-1555949963-ff9fe0c870eb", // web dev screen
+        xp_earned: 20,
+        created_at: "2025-04-16T13:50:00Z"
+      }
+    ]
+  },
+  {
+    id: 5,
+    author: "Olivia Martinez",
+    handle: "@olivia_cooks",
+    title: "Cook a New Recipe Weekly",
+    description: "Experiment with different cuisines every week to expand cooking skills.",
+    category: "Lifestyle",
+    frequency: "weekly",
+    start_date: "2025-03-01",
+    end_date: "2025-08-01",
+    tag: "Creativity",
+    timeAgo: "90d ago",
+    content: "Tried making Thai green curry for the first time—spicy but delicious!",
+    image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
+    streak: "6 week streak",
+    totalDays: 22,
+    createdAt: "2025-01-01T10:00:00Z",
+    likes: 61,
+    comments: 9,
+    liked: false,
+    progress_logs: [
+      {
+        id: 501,
+        goal_id: 5,
+        date: "2025-03-08",
+        note: "Cooked Italian lasagna. Perfect layering and cheesy goodness.",
+        media_url: "https://images.unsplash.com/photo-1604908812381-9f82b9a9f7a4", // lasagna
+        xp_earned: 8,
+        created_at: "2025-03-08T17:00:00Z"
+      },
+      {
+        id: 502,
+        goal_id: 5,
+        date: "2025-03-15",
+        note: "Made Japanese ramen from scratch—broth took 6 hours but worth it.",
+        media_url: "https://images.unsplash.com/photo-1604908177373-89b0c414c5dd", // ramen
+        xp_earned: 8,
+        created_at: "2025-03-15T18:10:00Z"
+      }
+    ]
+  }
+]
+
 
 // map tags to Tailwind badge classes
 const TAG_STYLES = {
   Habit: "bg-violet-100 text-violet-700",
   Health: "bg-green-100 text-green-700",
   Hobby: "bg-yellow-100 text-yellow-700",
-  default: "bg-gray-100 text-gray-700",
+  default: "bg-gray-100 text-black",
 };
 
 function tagClass(tag) {
@@ -142,6 +302,28 @@ export default function GoalForgeHome() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [sortBy, setSortBy] = useState("Newest");
+
+    const [commentsByGoal, setCommentsByGoal] = useState(() => {
+    const map = {};
+    initialDummyGoals.forEach((g) => (map[g.id] = []));
+    return map;
+  });
+  // which goals have their comment panel open
+  const [openComments, setOpenComments] = useState(new Set());
+  // temporary input value per goal
+  const [commentInputs, setCommentInputs] = useState({});
+
+  // keep comment containers in sync if goals change
+  useEffect(() => {
+    setCommentsByGoal((prev) => {
+      const next = { ...prev };
+      goals.forEach((g) => {
+        if (!next[g.id]) next[g.id] = [];
+      });
+      return next;
+    });
+  }, [goals]);
+
 
   // Simple debounce for search input
   useEffect(() => {
@@ -194,15 +376,58 @@ export default function GoalForgeHome() {
       return { ...g, liked, likes };
     }));
   }
-
-  function onComment(id) {
-    // placeholder - in future open comment drawer or navigate
-    console.log('Open comments for', id);
-    alert('Comments are not implemented in this demo.');
+    function toggleComments(goalId) {
+    setOpenComments((prev) => {
+      const n = new Set(prev);
+      if (n.has(goalId)) n.delete(goalId);
+      else n.add(goalId);
+      return n;
+    });
   }
 
+  function handleCommentInputChange(goalId, value) {
+    setCommentInputs((prev) => ({ ...prev, [goalId]: value }));
+  }
+
+  function addComment(goalId) {
+    const text = (commentInputs[goalId] || "").trim();
+    if (!text) return;
+
+    const comment = {
+      id: Date.now(), // simple unique id
+      author: "Current User",
+      text,
+      likes: 0,
+      liked: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    setCommentsByGoal((prev) => {
+      const next = { ...prev };
+      next[goalId] = [...(next[goalId] || []), comment];
+      return next;
+    });
+
+    // increment visible comments count on the goal
+    setGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, comments: (g.comments || 0) + 1 } : g)));
+
+    // clear input
+    setCommentInputs((prev) => ({ ...prev, [goalId]: "" }));
+  }
+
+  function toggleLikeComment(goalId, commentId) {
+    setCommentsByGoal((prev) => {
+      const next = { ...prev };
+      next[goalId] = (next[goalId] || []).map((c) =>
+        c.id === commentId ? { ...c, liked: !c.liked, likes: c.liked ? c.likes - 1 : c.likes + 1 } : c
+      );
+      return next;
+    });
+  }
+
+
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
+    <div className="min-h-screen bg-gray-50 text-black">
       {/* Top navigation */}
       <header className="bg-white border-b">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -216,14 +441,19 @@ export default function GoalForgeHome() {
                 <UserIcon />
                 <span className="hidden sm:inline">Profile</span>
               </button>
-             <button className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-md shadow hover:bg-gray-100 transition-colors">
-                <TargetIcon />
-                <span className="hidden sm:inline">My Goals</span>
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md shadow hover:bg-gray-900 transition-colors">
-                <PlusIcon />
+              <Link
+      to="/my-goals"
+      className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-md shadow hover:bg-gray-100 transition-colors"
+    >
+      <TargetIcon />
+      <span className="hidden sm:inline">My Goals</span>
+    </Link>
+<Link
+      to="/create-goal"
+      className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md shadow hover:bg-white-100 transition-colors"
+    >                <PlusIcon />
                 <span className="hidden sm:inline">Create Goal</span>
-            </button>
+              </Link>
              <button className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-md shadow hover:bg-gray-100 transition-colors">
                 <LogoutIcon />
                 <span className="hidden sm:inline">Logout</span>
@@ -234,7 +464,7 @@ export default function GoalForgeHome() {
       </header>
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <h2 className="text-2xl font-semibold">Explore Feed</h2>
-        <p className="mt-1 text-sm text-gray-500">Discover recent goal updates from the GoalForge community</p>
+        <p className="mt-1 text-sm text-black">Discover recent goal updates from the GoalForge community</p>
 
         {/* Search */}
         <div className="mt-6">
@@ -256,7 +486,7 @@ export default function GoalForgeHome() {
 
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-md px-3 py-2">
-                <span className="text-sm text-gray-600">Category:</span>
+                <span className="text-sm text-black">Category:</span>
                 <select value={category} onChange={(e) => setCategory(e.target.value)} className="bg-transparent outline-none text-sm">
                   {tags.map((t) => (
                     <option key={t} value={t}>{t}</option>
@@ -264,14 +494,14 @@ export default function GoalForgeHome() {
                 </select>
               </div>
               <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-md px-3 py-2">
-                <span className="text-sm text-gray-600">Sort by:</span>
+                <span className="text-sm text-black">Sort by:</span>
                 <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="bg-transparent outline-none text-sm">
                   <option>Newest</option>
                   <option>Oldest</option>
                   <option>Trending</option>
                 </select>
               </div>
-              <button onClick={handleClear} className="text-sm text-gray-600 px-3 py-1">Clear</button>
+              <button onClick={handleClear} className="text-sm text-black px-3 py-1">Clear</button>
             </div>
           </div>
         </div>
@@ -279,7 +509,7 @@ export default function GoalForgeHome() {
         {/* Feed */}
         <div className="mt-8 space-y-6">
           {filtered.length === 0 ? (
-            <div className="bg-white border border-gray-200 rounded-xl p-6 text-center text-gray-500">No results found</div>
+            <div className="bg-white border border-gray-200 rounded-xl p-6 text-center text-black">No results found</div>
           ) : (
             filtered.map((g) => (
               <article key={g.id} className="bg-white border border-gray-200 rounded-xl shadow-sm">
@@ -290,7 +520,7 @@ export default function GoalForgeHome() {
                       <div>
                         <div className="flex items-baseline gap-2">
                           <h3 className="font-semibold">{g.author}</h3>
-                          <span className="text-sm text-gray-500">{g.handle}</span>
+                          <span className="text-sm text-black">{g.handle}</span>
                         </div>
                         <div className="mt-1 flex items-center gap-2">
                           <h4 className="font-medium">{g.title}</h4>
@@ -299,23 +529,31 @@ export default function GoalForgeHome() {
                       </div>
                     </div>
 
-                    <div className="text-sm text-gray-400">{g.timeAgo}</div>
+                    <div className="text-sm text-black">{g.timeAgo}</div>
                   </div>
 
-                  <p className="mt-4 text-gray-700 leading-relaxed">{g.content}</p>
+                  <p className="mt-4 text-black leading-relaxed">{g.content}</p>
 
                   {/* image placeholder */}
-                  <div className="mt-4">
-                    <div className="w-full rounded-lg overflow-hidden bg-gray-100 border border-gray-200 h-48 flex items-center justify-center">
-                      {/* Replace this block with <img src={g.image} ... /> when you have real images */}
-                      <div className="text-gray-400">Image placeholder</div>
-                    </div>
-                  </div>
+                 <div className="mt-4">
+  <div className="w-full rounded-lg overflow-hidden bg-gray-100 border border-gray-200 h-48 flex items-center justify-center">
+    {g.image ? (
+      <img
+        src={g.image}
+        alt={g.title}
+        className="w-full h-full object-cover"
+      />
+    ) : (
+      <span className="text-gray-300">No image available</span>
+    )}
+  </div>
+</div>
+
 
                   {/* footer stats */}
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="bg-gray-50 border border-gray-100 rounded-md px-4 py-2 text-sm text-gray-600 inline-flex items-center">
+                      <div className="bg-gray-50 border border-gray-100 rounded-md px-4 py-2 text-sm text-black inline-flex items-center">
                         <FlameIcon />
                         <span>{g.streak} • {g.totalDays} total days</span>
                       </div>
@@ -323,14 +561,14 @@ export default function GoalForgeHome() {
 
                     {/* actions row: comment, like, view */}
                     <div className="flex items-center gap-3">
-                      <button onClick={() => onComment(g.id)} className="flex items-center gap-2 text-sm text-gray-600 px-3 py-1 rounded-md bg-white border border-gray-200">
+                      <button onClick={() => toggleComments(g.id)} className="flex items-center gap-2 text-sm text-black px-3 py-1 rounded-md bg-white border border-gray-200">
                         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                         </svg>
-                        <span>{g.comments}</span>
+                        <span>{g.comments || 0}</span>
                       </button>
 
-                      <button onClick={() => toggleLike(g.id)} className={`flex items-center gap-2 text-sm px-3 py-1 rounded-md border ${g.liked ? 'bg-red-50 border-red-100 text-red-600' : 'bg-white border-gray-200 text-gray-600'}`}>
+                      <button onClick={() => toggleLike(g.id)} className={`flex items-center gap-2 text-sm px-3 py-1 rounded-md border ${g.liked ? 'bg-red-50 border-red-100 text-red-600' : 'bg-white border-gray-200 text-black'}`}>
                         {g.liked ? (
                           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                             <path d="M12 21s-7-4.35-9-6.5C-1 10 4 6 7 6c2 0 3.5 1.5 5 3 1.5-1.5 3-3 5-3 3 0 8 4 4 8.5C19 16.65 12 21 12 21z" />
@@ -343,9 +581,64 @@ export default function GoalForgeHome() {
                         <span>{g.likes}</span>
                       </button>
 
-                      <button className="text-sm px-3 py-1 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">View goal</button>
+<Link
+  to={`/goal/${g.id}`}
+  state={{ goal: g }}
+  className="text-sm px-3 py-1 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100"
+>
+  View goal
+</Link>
                     </div>
                   </div>
+                  {/* --- Comments panel (toggles open) --- */}
+                  {openComments.has(g.id) && (
+                    <div className="mt-4 border-t pt-4">
+                      {/* add comment */}
+                      <div className="flex gap-3 items-start">
+                        <Avatar name="Current User" />
+                        <div className="flex-1">
+                          <textarea
+                            value={commentInputs[g.id] || ""}
+                            onChange={(e) => handleCommentInputChange(g.id, e.target.value)}
+                            rows={2}
+                            className="w-full border border-gray-200 rounded-md p-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                            placeholder="Add a comment..."
+                          />
+                          <div className="mt-2 flex items-center justify-end gap-2">
+                            <button onClick={() => setCommentInputs((p) => ({ ...p, [g.id]: "" }))} className="text-sm text-black px-3 py-1">Cancel</button>
+                            <button onClick={() => addComment(g.id)} className="text-sm px-3 py-1 rounded-md bg-black text-white">Comment</button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* comments list */}
+                      <div className="mt-4 space-y-3">
+                        {(commentsByGoal[g.id] || []).length === 0 ? (
+                          <div className="text-sm text-grey-200">No comments yet — be the first!</div>
+                        ) : (
+                          (commentsByGoal[g.id] || []).map((c) => (
+                            <div key={c.id} className="flex items-start gap-3">
+                              <Avatar name={c.author} />
+                              <div className="flex-1">
+                                <div className="flex items-baseline justify-between">
+                                  <div>
+                                    <div className="text-sm font-semibold">{c.author}</div>
+                                    <div className="text-xs text-black">{new Date(c.createdAt).toLocaleString()}</div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button onClick={() => toggleLikeComment(g.id, c.id)} className={`text-sm px-2 py-1 rounded-md ${c.liked ? 'text-red-600' : 'text-black'}`}>
+                                      {c.liked ? '♥' : '♡'} {c.likes}
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="mt-1 text-black">{c.text}</div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </article>
             ))
