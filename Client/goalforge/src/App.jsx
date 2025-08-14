@@ -7,8 +7,10 @@ import Logout from "./Pages/Logout";
 import MyGoals from "./Pages/MyGoals";
 import CreateGoalPage from "./Pages/CreateGoal";
 import ViewGoal from "./Pages/ViewGoal";
+import Profile from "./Pages/Profile";
 import LogProgress from "./Pages/LogProgress";
 import ForgotPassword from "./Pages/ForgotPassword";
+
 
 
 
@@ -43,9 +45,12 @@ function App() {
         <Route path="/my-goals" element={<MyGoals currentUser={currentUser} />} />
         <Route path="/create-goal" element={<CreateGoalPage />} />
         <Route path="/goal/:id" element={<ViewGoal />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="*" element={<div>404 Not Found</div>} />
         <Route path="/log-progress" element={<LogProgress />} />
         <Route path="forgot-password" element={<ForgotPassword />} />
        
+
       </Routes>
     </Router>
   )
