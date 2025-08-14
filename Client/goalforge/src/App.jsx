@@ -7,6 +7,9 @@ import Logout from "./Pages/Logout";
 import MyGoals from "./Pages/MyGoals";
 import CreateGoalPage from "./Pages/CreateGoal";
 import ViewGoal from "./Pages/ViewGoal";
+import LogProgress from "./Pages/LogProgress";
+import ForgotPassword from "./Pages/ForgotPassword";
+
 
 
 function App() {
@@ -40,6 +43,9 @@ function App() {
         <Route path="/my-goals" element={<MyGoals currentUser={currentUser} />} />
         <Route path="/create-goal" element={<CreateGoalPage />} />
         <Route path="/goal/:id" element={<ViewGoal />} />
+        <Route path="/log-progress" element={<LogProgress />} />
+        <Route path="forgot-password" element={<ForgotPassword />} />
+       
       </Routes>
     </Router>
   )

@@ -51,7 +51,7 @@ const onSwitchToSignup = () => {
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="ml-2 text-sm text-blue-500 hover:underline"
+            className="ml-2 text-sm text-black hover:underline"
           >
             {showPassword ? "Hide" : "Show"}
           </button>
@@ -60,14 +60,14 @@ const onSwitchToSignup = () => {
 
       <button
         type="submit"
-        className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition duration-200"
+        className="w-full bg-black text-white py-2 rounded-lg hover:bg-black transition duration-200"
       >
         Sign in
       </button>
     </form>
 
-    <div className="flex justify-between mt-4 text-sm text-blue-500">
-      <a href="#" className="hover:underline">
+    <div className="flex justify-between mt-4 text-sm text-black">
+      <a href="/forgot-password" className="hover:underline">
         Forgot password?
       </a>
       <button
