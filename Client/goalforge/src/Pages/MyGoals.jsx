@@ -531,7 +531,7 @@ export default function MyGoals() {
 
               {/* Actions */}
               <div className="mt-4 flex items-center gap-3">
-                <button onClick={() => logProgress(g.id)} className="flex-1 px-4 py-2 bg-black text-white rounded-md shadow-sm">+ Log Progress</button>
+                <Link to={`/log-progress/${g.id}`}       className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md shadow hover:bg-white-100 transition-colors">+ Log Progress</Link>
 
                 <Link
   to={`/goal/${g.id}`}

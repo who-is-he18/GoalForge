@@ -47,7 +47,7 @@ function App() {
         <Route path="/goal/:id" element={<ViewGoal />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="*" element={<div>404 Not Found</div>} />
-        <Route path="/log-progress" element={<LogProgress />} />
+        <Route path="/log-progress/:id" element={<LogProgress />} />
         <Route path="forgot-password" element={<ForgotPassword />} />
        
 

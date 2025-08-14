@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+  import { useNavigate } from "react-router-dom";
+
 
 
 const UserIcon = () => (
@@ -425,6 +427,12 @@ export default function GoalForgeHome() {
     });
   }
 
+  const navigate = useNavigate();
+  const handleLogout = () => {
+    navigate("/");
+  };
+  
+
 
   return (
     <div className="min-h-screen bg-gray-50 text-black">
@@ -450,10 +458,14 @@ export default function GoalForgeHome() {
     >                <PlusIcon />
                 <span className="hidden sm:inline">Create Goal</span>
               </Link>
-             <button className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-md shadow hover:bg-gray-100 transition-colors">
-                <LogoutIcon />
-                <span className="hidden sm:inline">Logout</span>
-            </button>
+              <Link
+      to="/my-goals"
+      className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-md shadow hover:bg-white-100 transition-colors"
+    >                
+                <span className="hidden sm:inline">My Goals</span>
+              </Link>
+              <button onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-md shadow hover:bg-white-100 transition-colors" >Logout</button>
             </div>
           </div>
         </div>
