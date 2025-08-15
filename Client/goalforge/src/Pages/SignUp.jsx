@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../api"; // axios instance (Vite / import.meta.env)
 
 export default function Signup({ onSignup }) {
   const [username, setUsername] = useState("");
@@ -9,6 +10,8 @@ export default function Signup({ onSignup }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [profileImage, setProfileImage] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const navigate = useNavigate();
 
@@ -18,13 +21,81 @@ export default function Signup({ onSignup }) {
     }
   };
 
-  const handleSignup = (e) => {
+  const handleSignup = async (e) => {
     e.preventDefault();
+    setError(null);
+
     if (password !== confirmPassword) {
-      alert("Passwords do not match!");
+      setError("Passwords do not match!");
       return;
     }
-    onSignup(username);
+
+    // Basic client-side password strength check (optional)
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Prepare payload matching your backend RegisterResource expectations
+      const payload = {
+        username: username.trim(),
+        email: email.trim(),
+        password,
+        confirm_password: confirmPassword,
+      };
+
+      // NOTE: current backend route expects JSON fields.
+      // change the backend to accept multipart/form-data and use FormData here.
+      // Example (DO NOT use unless backend supports it):
+      // const formData = new FormData();
+      // formData.append("username", username);
+      // formData.append("email", email);
+      // formData.append("password", password);
+      // formData.append("confirm_password", confirmPassword);
+      // if (profileImage) formData.append("profile_image", profileImage);
+      // await api.post("/users/register", formData, { headers: { "Content-Type": "multipart/form-data" } });
+
+      const res = await api.post("/users/register", payload);
+      const data = res.data;
+
+      // backend returns { message, access_token, user: {...} }
+      const accessToken = data.access_token || data.token || null;
+      const user = data.user || null;
+
+      if (accessToken) {
+        localStorage.setItem("token", accessToken);
+      }
+
+      // call parent's onSignup callback if provided: pass user and token
+      if (typeof onSignup === "function") {
+        try {
+          onSignup(user, accessToken);
+        } catch (err) {
+          // parent callback error shouldn't block flow
+          console.warn("onSignup callback error:", err);
+        }
+      }
+
+      // navigate to a post-signup page — change as you wish
+      // I pick "/dashboard" as a reasonable default; change or remove if your app differs.
+      navigate("/home");
+    } catch (err) {
+      console.error("Signup failed:", err);
+      // axios error shape handling
+      if (err.response && err.response.data) {
+        const msg =
+          err.response.data.message ||
+          err.response.data.error ||
+          JSON.stringify(err.response.data);
+        setError(msg);
+      } else {
+        setError("Failed to register. Please check your network and try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const onSwitchToLogin = () => {
@@ -141,12 +212,20 @@ export default function Signup({ onSignup }) {
             </div>
           </div>
 
+          {/* Error */}
+          {error && (
+            <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+              {error}
+            </div>
+          )}
+
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full bg-black text-white py-2 rounded-lg hover:bg-gray-900 transition duration-200"
+            disabled={loading}
+            className="w-full bg-black text-white py-2 rounded-lg hover:bg-gray-900 transition duration-200 disabled:opacity-60"
           >
-            Create account
+            {loading ? "Creating account..." : "Create account"}
           </button>
         </form>
 

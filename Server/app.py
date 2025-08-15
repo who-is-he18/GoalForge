@@ -1,9 +1,9 @@
-# Import the create_app factory function from the app module
+import os
 from app import create_app
 
-# Create an instance of the Flask application
 app = create_app()
 
-# Run the Flask development server if this file is executed directly
 if __name__ == "__main__":
-    app.run(debug=True)  # Enable debug mode for development
+    # Useful to allow a PORT env var when testing or containerizing
+    port = int(os.getenv("PORT", 5000))
+    app.run(debug=True, host="127.0.0.1", port=port)

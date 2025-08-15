@@ -34,8 +34,6 @@ function App() {
   };
 
   return (
-    
-
     <Router>
       <Routes>
         <Route path="/home" element={<GoalForgeHome />} />
@@ -48,9 +46,7 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="*" element={<div>404 Not Found</div>} />
         <Route path="/log-progress/:id" element={<LogProgress />} />
-        <Route path="forgot-password" element={<ForgotPassword />} />
-       
-
+        <Route path="forgot-password" element={<ForgotPassword />} />      
       </Routes>
     </Router>
   )
