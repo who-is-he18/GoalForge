@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../api"; // axios instance (Vite / import.meta.env)
+import api from "../api"; 
 
 export default function Signup({ onSignup }) {
   const [username, setUsername] = useState("");

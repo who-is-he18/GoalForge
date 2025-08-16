@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import React from "react";      
+import React from "react";   
+import api from "../api";   
 
 export default function CreateGoalPage() {
   const navigate = useNavigate();
@@ -27,12 +28,42 @@ export default function CreateGoalPage() {
     else navigate("/my-goals");
   }
 
-  function handleSubmit(e) {
-    e.preventDefault();
-    // simulated create
-    alert(`Created goal: ${goalTitle || "(no title)"}`);
+async function handleSubmit(e) {
+  e.preventDefault();
+
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("You must be logged in to create a goal.");
+      navigate("/login");
+      return;
+    }
+
+    const payload = {
+      title: goalTitle,
+      description,
+      category,
+      start_date: startDate,
+      end_date: endDate || null,
+      frequency,
+      is_public: isPublic,
+    };
+
+    const res = await api.post("/goals", payload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    console.log("Goal created:", res.data);
+    alert(`Created goal: ${res.data.title}`);
     navigate("/my-goals");
+  } catch (err) {
+    console.error("Error creating goal:", err);
+    alert("Failed to create goal. Please try again.");
   }
+}
+
 return (
     <div className="min-h-screen bg-white px-8 py-10">
       {/* Top row: back, small icon, title (wider max) */}

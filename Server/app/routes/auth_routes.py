@@ -27,6 +27,7 @@ class RegisterResource(Resource):
         email = data.get("email")
         password = data.get("password")
         confirm_password = data.get("confirm_password")
+        
 
         # Validate all fields are present
         if not all([username, email, password, confirm_password]):
