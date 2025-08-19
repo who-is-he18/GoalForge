@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
   import { useNavigate } from "react-router-dom";
+  import api from "../api";
 
 
 
@@ -60,229 +61,6 @@ const Avatar = ({ src, name }) => (
   </div>
 );
 
-function useDarkMode() {
-  const [dark, setDark] = useState(() =>
-    window.matchMedia('(prefers-color-scheme: dark)').matches
-  );
-  useEffect(() => {
-    if (dark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [dark]);
-  return [dark, setDark];
-}
-
-const initialDummyGoals = [
-  {
-    id: 1,
-    author: "Emma Davis",
-    handle: "@emma_writes",
-    title: "Write 500 Words Daily",
-    description: "Daily short-form writing to build a habit. Focus: short stories and microfiction.",
-    category: "Health",
-    frequency: "daily",
-    start_date: "2025-07-15",
-    end_date: "2025-08-14",
-    tag: "Habit",
-    timeAgo: "205d ago",
-    content: "Just hit my 500-word target for today! Working on a short story about time travel. Writing has become such a therapeutic part of my routine.",
-    image: "https://images.unsplash.com/photo-1519681393784-d120267933ba",
-    streak: "8 day streak",
-    totalDays: 31,
-    createdAt: "2025-02-01T08:30:00Z",
-    likes: 56,
-    comments: 4,
-    liked: false,
-    progress_logs: [
-      {
-        id: 101,
-        goal_id: 1,
-        date: "2025-08-01",
-        note: "Wrote 500 words on a time-travel story. Experimented with unreliable narrator.",
-        media_url: "https://images.unsplash.com/photo-1519681393784-d120267933ba", // notebook
-        xp_earned: 10,
-        created_at: "2025-08-01T10:00:00Z"
-      },
-      {
-        id: 102,
-        goal_id: 1,
-        date: "2025-08-02",
-        note: "Rewrote opening. Hit 600 words. Felt energized.",
-        media_url: "https://images.unsplash.com/photo-1507842217343-583bb7270b66", // laptop writing
-        xp_earned: 10,
-        created_at: "2025-08-02T09:30:00Z"
-      }
-    ]
-  },
-  {
-    id: 2,
-    author: "Liam Carter",
-    handle: "@liam_lifts",
-    title: "Morning Workout Challenge",
-    description: "30 minutes of strength training every morning before breakfast.",
-    category: "Fitness",
-    frequency: "daily",
-    start_date: "2025-06-01",
-    end_date: "2025-07-01",
-    tag: "Discipline",
-    timeAgo: "180d ago",
-    content: "Feeling stronger every day. Today’s set was tough but worth it!",
-    image: "https://images.unsplash.com/photo-1599058917212-d750089bc07c",
-    streak: "15 day streak",
-    totalDays: 30,
-    createdAt: "2025-01-15T07:15:00Z",
-    likes: 89,
-    comments: 12,
-    liked: true,
-    progress_logs: [
-      {
-        id: 201,
-        goal_id: 2,
-        date: "2025-06-10",
-        note: "Did push, pull, legs circuit. Increased deadlift weight by 5kg.",
-        media_url: "https://images.unsplash.com/photo-1583454110559-21d2a29a7e66", // lifting weights
-        xp_earned: 15,
-        created_at: "2025-06-10T08:00:00Z"
-      },
-      {
-        id: 202,
-        goal_id: 2,
-        date: "2025-06-11",
-        note: "Focused on upper body strength. Added extra push-ups to cooldown.",
-        media_url: "https://images.unsplash.com/photo-1594737625785-c5c4b8a3c3c2", // push-ups
-        xp_earned: 15,
-        created_at: "2025-06-11T07:45:00Z"
-      }
-    ]
-  },
-  {
-    id: 3,
-    author: "Sophia Nguyen",
-    handle: "@sophia_reads",
-    title: "Read 20 Pages a Day",
-    description: "Daily reading habit to explore classic literature and new releases.",
-    category: "Learning",
-    frequency: "daily",
-    start_date: "2025-05-05",
-    end_date: "2025-06-04",
-    tag: "Growth",
-    timeAgo: "150d ago",
-    content: "Finished another chapter of ‘Pride and Prejudice’—Jane Austen is brilliant!",
-    image: "https://images.unsplash.com/photo-1512820790803-83ca734da794",
-    streak: "21 day streak",
-    totalDays: 31,
-    createdAt: "2025-01-10T09:00:00Z",
-    likes: 73,
-    comments: 8,
-    liked: false,
-    progress_logs: [
-      {
-        id: 301,
-        goal_id: 3,
-        date: "2025-05-15",
-        note: "Read 25 pages of ‘1984’. Orwell’s world-building is intense.",
-        media_url: "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f", // open book
-        xp_earned: 12,
-        created_at: "2025-05-15T19:00:00Z"
-      },
-      {
-        id: 302,
-        goal_id: 3,
-        date: "2025-05-16",
-        note: "Started ‘To Kill a Mockingbird’. Loving the narrative voice.",
-        media_url: "https://images.unsplash.com/photo-1507842217343-583bb7270b66", // reading desk
-        xp_earned: 12,
-        created_at: "2025-05-16T18:45:00Z"
-      }
-    ]
-  },
-  {
-    id: 4,
-    author: "Ethan Brooks",
-    handle: "@ethan_codes",
-    title: "Learn JavaScript in 60 Days",
-    description: "Commit to coding at least 1 hour daily. Goal: Build a full-stack app.",
-    category: "Career",
-    frequency: "daily",
-    start_date: "2025-04-10",
-    end_date: "2025-06-09",
-    tag: "Skill",
-    timeAgo: "120d ago",
-    content: "Debugged my first API call today—felt like magic when it finally worked!",
-    image: "https://images.unsplash.com/photo-1518779578993-ec3579fee39f",
-    streak: "10 day streak",
-    totalDays: 60,
-    createdAt: "2025-01-05T11:20:00Z",
-    likes: 102,
-    comments: 15,
-    liked: true,
-    progress_logs: [
-      {
-        id: 401,
-        goal_id: 4,
-        date: "2025-04-15",
-        note: "Learned JavaScript array methods—map, filter, reduce.",
-        media_url: "https://images.unsplash.com/photo-1555066931-4365d14bab8c", // code screen
-        xp_earned: 20,
-        created_at: "2025-04-15T14:30:00Z"
-      },
-      {
-        id: 402,
-        goal_id: 4,
-        date: "2025-04-16",
-        note: "Built a small to-do app. Practiced DOM manipulation.",
-        media_url: "https://images.unsplash.com/photo-1555949963-ff9fe0c870eb", // web dev screen
-        xp_earned: 20,
-        created_at: "2025-04-16T13:50:00Z"
-      }
-    ]
-  },
-  {
-    id: 5,
-    author: "Olivia Martinez",
-    handle: "@olivia_cooks",
-    title: "Cook a New Recipe Weekly",
-    description: "Experiment with different cuisines every week to expand cooking skills.",
-    category: "Lifestyle",
-    frequency: "weekly",
-    start_date: "2025-03-01",
-    end_date: "2025-08-01",
-    tag: "Creativity",
-    timeAgo: "90d ago",
-    content: "Tried making Thai green curry for the first time—spicy but delicious!",
-    image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
-    streak: "6 week streak",
-    totalDays: 22,
-    createdAt: "2025-01-01T10:00:00Z",
-    likes: 61,
-    comments: 9,
-    liked: false,
-    progress_logs: [
-      {
-        id: 501,
-        goal_id: 5,
-        date: "2025-03-08",
-        note: "Cooked Italian lasagna. Perfect layering and cheesy goodness.",
-        media_url: "https://images.unsplash.com/photo-1604908812381-9f82b9a9f7a4", // lasagna
-        xp_earned: 8,
-        created_at: "2025-03-08T17:00:00Z"
-      },
-      {
-        id: 502,
-        goal_id: 5,
-        date: "2025-03-15",
-        note: "Made Japanese ramen from scratch—broth took 6 hours but worth it.",
-        media_url: "https://images.unsplash.com/photo-1604908177373-89b0c414c5dd", // ramen
-        xp_earned: 8,
-        created_at: "2025-03-15T18:10:00Z"
-      }
-    ]
-  }
-]
-
-
 // map tags to Tailwind badge classes
 const TAG_STYLES = {
   Habit: "bg-violet-100 text-violet-700",
@@ -296,24 +74,66 @@ function tagClass(tag) {
 }
 
 export default function GoalForgeHome() {
-  // TODO: when backend is ready, replace initialDummyGoals with fetched data
-  // useEffect(()=>{ fetch('/api/goals').then(res=>res.json()).then(setGoals) },[])
-  const [dark, setDark] = useDarkMode();
-  const [goals, setGoals] = useState(initialDummyGoals);
+   const [goals, setGoals] = useState([]); // start empty
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [sortBy, setSortBy] = useState("Newest");
 
-    const [commentsByGoal, setCommentsByGoal] = useState(() => {
-    const map = {};
-    initialDummyGoals.forEach((g) => (map[g.id] = []));
-    return map;
-  });
-  // which goals have their comment panel open
+  const [commentsByGoal, setCommentsByGoal] = useState({});
   const [openComments, setOpenComments] = useState(new Set());
-  // temporary input value per goal
   const [commentInputs, setCommentInputs] = useState({});
+
+ // 🟢 normalization inline
+function normalizeGoal(apiGoal) {
+  return {
+    id: apiGoal.id,
+    title: apiGoal.title,
+    description: apiGoal.description,
+    category: apiGoal.category || "General",
+    frequency: apiGoal.frequency,
+    start_date: apiGoal.start_date,
+    end_date: apiGoal.end_date,
+    createdAt: apiGoal.created_at,
+
+    // ✅ Use only what backend provides
+    author: `User ${apiGoal.user_id}`,    // fallback since no user object
+    handle: `@user${apiGoal.user_id}`,    // simple placeholder handle
+    tag: apiGoal.category || "General",
+    timeAgo: new Date(apiGoal.created_at).toLocaleDateString(),
+
+    // ✅ safe defaults (backend doesn’t send these yet)
+    likes: 0,
+    comments: 0,
+    liked: false,
+    streak: `${apiGoal.streak_count || 0} day streak`,
+    totalDays: apiGoal.longest_streak || 0,
+    image: null,
+    progress_logs: [] // leave empty since not returned
+  };
+}
+
+  // ✅ Fetch goals
+  useEffect(() => {
+    async function fetchGoals() {
+      try {
+        setLoading(true);
+        const res = await api.get("/goals");
+        const normalized = (res.data || []).map(normalizeGoal);
+        setGoals(normalized);
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching goals:", err);
+        setError("Failed to load goals.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchGoals();
+  }, []);
 
   // keep comment containers in sync if goals change
   useEffect(() => {
@@ -325,7 +145,6 @@ export default function GoalForgeHome() {
       return next;
     });
   }, [goals]);
-
 
   // Simple debounce for search input
   useEffect(() => {
@@ -427,7 +246,6 @@ export default function GoalForgeHome() {
     });
   }
 
-  const navigate = useNavigate();
   const handleLogout = () => {
     navigate("/");
   };

@@ -50,9 +50,6 @@ async function handleSubmit(e) {
     };
 
     const res = await api.post("/goals", payload, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
     });
 
     console.log("Goal created:", res.data);
