@@ -1,4 +1,6 @@
 from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
+from marshmallow_sqlalchemy.fields import Nested
+
 from app.models import (
     User,
     Goal,
@@ -19,11 +21,23 @@ from app.models import (
 class UserSchema(SQLAlchemyAutoSchema):
     class Meta:
         model = User
-        load_instance = True      # Deserialize to model instances
-        include_fk = True         # Include foreign keys in serialization
+        load_instance = True
+        include_fk = True
+        exclude = (
+            "password_hash",
+            "goals",
+            "cheers",
+            "comments",
+            "badges",
+            "notifications",
+            "following",
+        )
 
 # Goal model schema
 class GoalSchema(SQLAlchemyAutoSchema):
+    user = Nested(UserSchema, only=("id", "username", "profile_pic"))  
+    # 👆 only include safe fields
+
     class Meta:
         model = Goal
         load_instance = True
@@ -36,15 +50,19 @@ class GoalProgressSchema(SQLAlchemyAutoSchema):
         load_instance = True
         include_fk = True
 
-# Comment model schema
+# Comment schema with nested user
 class CommentSchema(SQLAlchemyAutoSchema):
+    user = Nested(UserSchema, only=("id", "username", "profile_pic"))
+
     class Meta:
         model = Comment
         load_instance = True
         include_fk = True
 
-# Cheer model schema
+# Cheer schema with nested user
 class CheerSchema(SQLAlchemyAutoSchema):
+    user = Nested(UserSchema, only=("id", "username", "profile_pic"))
+
     class Meta:
         model = Cheer
         load_instance = True

@@ -644,3 +644,4 @@ class NotificationResource(Resource):
         db.session.delete(notification)
         db.session.commit()
         return {"message": "Notification deleted"}, 200
+    

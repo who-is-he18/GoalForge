@@ -20,7 +20,8 @@ from .core_routes import (
     BadgeResource,           # Handles individual badge operations
     UserBadgeResource,       # Handles individual user-badge operations
     FollowerResource,        # Handles individual follower operations
-    NotificationResource       # Handles individual notification operations
+    NotificationResource,       # Handles individual notification operations
+
 )
 
 # Authentication and user management endpoints
@@ -30,7 +31,9 @@ from .auth_routes import (
     LogoutResource,             # Handles user logout
     UpdateUserResource,         # Handles updating user details
     DeleteUserResource,         # Handles deleting a user
-    AdminUserResource           # Handles admin operations on users
+    AdminUserResource,           # Handles admin operations on users
+    MeResource,               # Handles operations for the current user
+
 )
 
 # ===========================
@@ -78,5 +81,7 @@ def register_routes(api):
     api.add_resource(GoalResource, '/api/goals/<int:goal_id>')               # Individual goal ops
     api.add_resource(GoalProgressListResource, '/api/progress')              # List/create progress
     api.add_resource(GoalProgressResource, '/api/progress/<int:progress_id>')# Progress ops
+    api.add_resource(MeResource, '/api/me')                                   # Current user operations
+    
 
 

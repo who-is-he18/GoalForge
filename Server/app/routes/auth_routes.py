@@ -1,4 +1,4 @@
-from flask import request, jsonify
+from flask import request, jsonify, Blueprint
 from flask_restful import Resource
 from flask_jwt_extended import (
     create_access_token, jwt_required, get_jwt, get_jwt_identity
@@ -243,4 +243,18 @@ class DeleteUserResource(Resource):
         db.session.commit()
 
         return {"message": "User and related data deleted successfully."}, 200
+    
+class MeResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+        if not user:
+            return {"message": "User not found"}, 404
 
+        return {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "profile_pic": user.profile_pic  # optional
+        }, 200
