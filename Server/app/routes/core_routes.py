@@ -1,7 +1,7 @@
 # Flask RESTful API resources for GoalForge core models
 
 from flask_restful import Resource, reqparse
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
 from flask import request
 from app.models import (
     User, Goal, GoalProgress, Comment, Cheer,
@@ -14,7 +14,7 @@ from app.resources.serializers import (
     goal_schema, goals_schema, progress_schema, progresses_schema
 )
 from app.extensions import db
-from datetime import datetime
+from datetime import datetime , date
 
 # Initialize Marshmallow schemas for serialization
 goal_schema = GoalSchema()                   # Single goal
@@ -49,8 +49,37 @@ class UserListResource(Resource):
 class GoalListResource(Resource):
     """Resource for listing and creating goals."""
     def get(self):
+        # Attempt to read current user if a JWT is present; allow anonymous access
+        try:
+            verify_jwt_in_request(optional=True)
+            current_user_id = get_jwt_identity()
+        except Exception:
+            current_user_id = None
+
         goals = Goal.query.all()
-        return goals_schema.dump(goals), 200
+
+        out = []
+        for goal in goals:
+            g = goal_schema.dump(goal)
+
+            # collect all progress IDs for this goal (empty list if none)
+            progress_ids = [p.id for p in getattr(goal, "progress_logs", [])] or []
+
+        # compute aggregate cheers_count across all progress records for the goal
+            cheers_count = 0
+            my_cheer_id = None
+            if progress_ids:
+                cheers_count = Cheer.query.filter(Cheer.goal_progress_id.in_(progress_ids)).count()
+            if current_user_id:
+                my_cheer = Cheer.query.filter(Cheer.goal_progress_id.in_(progress_ids),
+                                             Cheer.user_id == current_user_id).first()
+                my_cheer_id = my_cheer.id if my_cheer else None
+
+            g['cheers_count'] = cheers_count
+            g['my_cheer_id'] = my_cheer_id
+            out.append(g)
+
+        return out, 200
 
     @jwt_required()
     def post(self):
@@ -75,11 +104,35 @@ class GoalListResource(Resource):
         db.session.commit()
         return goal_schema.dump(goal), 201
 
+
 class GoalResource(Resource):
     """Resource for retrieving, updating, or deleting a single goal."""
     def get(self, goal_id):
+        # Attempt to read current user if token present (allow anonymous GET)
+        try:
+            verify_jwt_in_request(optional=True)
+            current_user_id = get_jwt_identity()
+        except Exception:
+            current_user_id = None
+
         goal = Goal.query.get_or_404(goal_id)
-        return goal_schema.dump(goal), 200
+        g = goal_schema.dump(goal)
+
+        progress_ids = [p.id for p in getattr(goal, "progress_logs", [])] or []
+
+        cheers_count = 0
+        my_cheer_id = None
+        if progress_ids:
+            cheers_count = Cheer.query.filter(Cheer.goal_progress_id.in_(progress_ids)).count()
+        if current_user_id:
+            my_cheer = Cheer.query.filter(Cheer.goal_progress_id.in_(progress_ids),
+                                         Cheer.user_id == current_user_id).first()
+            my_cheer_id = my_cheer.id if my_cheer else None
+
+        g['cheers_count'] = cheers_count
+        g['my_cheer_id'] = my_cheer_id
+
+        return g, 200
 
     @jwt_required()
     def put(self, goal_id):
@@ -108,7 +161,6 @@ class GoalResource(Resource):
         db.session.delete(goal)
         db.session.commit()
         return {"message": "Goal deleted"}, 200
-
 # ------------------- Goal Progress Resources -------------------
 
 class GoalProgressListResource(Resource):
@@ -182,29 +234,83 @@ class GoalProgressResource(Resource):
 
 # ------------------- Other List Resources -------------------
 
+
 class CommentListResource(Resource):
-    """Resource for listing all comments."""
+    """Resource for listing and creating comments."""
     def get(self):
-        comments = Comment.query.all()
+        # support query params: goal_progress_id or goal_id
+        gp_id = request.args.get("goal_progress_id", type=int)
+        goal_id = request.args.get("goal_id", type=int)
+
+        query = Comment.query
+        if gp_id:
+            query = query.filter_by(goal_progress_id=gp_id)
+        elif goal_id:
+            # get comments for any progress rows that belong to this goal
+            query = query.join(GoalProgress, Comment.goal_progress_id == GoalProgress.id).filter(GoalProgress.goal_id == goal_id)
+
+        comments = query.order_by(Comment.created_at.asc()).all()
         return comments_schema.dump(comments), 200
-    
+
     @jwt_required()
     def post(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('user_id', type=int, required=True)
-        parser.add_argument('goal_progress_id', type=int, required=True)
-        parser.add_argument('content', required=True)
-        args = parser.parse_args()
+        # Accept either goal_progress_id or goal_id. Content required.
+        data = request.get_json() or {}
+        content = (data.get("content") or "").strip()
+        gp_id = data.get("goal_progress_id")
+        goal_id = data.get("goal_id")
 
+        if not content:
+            return {"message": "content is required"}, 400
+
+        # If no gp_id supplied, create a minimal GoalProgress for the provided goal_id
+        if not gp_id:
+            if not goal_id:
+                return {"message": "goal_progress_id or goal_id is required"}, 400
+
+            goal = Goal.query.get(goal_id)
+            if not goal:
+                return {"message": "Goal not found"}, 404
+
+            # create a minimal GoalProgress. GoalProgress requires 'date', so use today.
+            gp = GoalProgress(
+                goal_id=goal.id,
+                date=date.today(),          # required field
+                note="Auto-created progress for comment",
+                xp_earned=10
+            )
+            db.session.add(gp)
+            db.session.commit()
+            gp_id = gp.id
+
+        # Determine user_id from JWT identity (server trusts JWT)
+        identity = get_jwt_identity()
+        # Adapt this if your identity payload is different (e.g. a dict)
+        if isinstance(identity, int):
+            user_id = identity
+        elif isinstance(identity, dict):
+            user_id = identity.get("id")
+        else:
+            # try to coerce
+            user_id = identity
+
+        if not user_id:
+            return {"message": "Invalid user identity"}, 401
+
+        # Create the comment
         comment = Comment(
-            user_id=args['user_id'],
-            goal_progress_id=args['goal_progress_id'],
-            content=args['content']
+            user_id=user_id,
+            goal_progress_id=gp_id,
+            content=content,
+            created_at=datetime.utcnow()
         )
         db.session.add(comment)
         db.session.commit()
+
+        # Return the created comment (including goal_progress_id)
         return comment_schema.dump(comment), 201
-    
+
+
 class CommentResource(Resource):
     """Resource for retrieving, updating, or deleting a single comment."""
     def get(self, comment_id):
@@ -218,10 +324,8 @@ class CommentResource(Resource):
         parser.add_argument('content')
         args = parser.parse_args()
 
-        # Update only provided fields
-        for attr, value in args.items():
-            if value is not None:
-                setattr(comment, attr, value)
+        if args.get('content') is not None:
+            comment.content = args['content']
 
         db.session.commit()
         return comment_schema.dump(comment), 200
@@ -234,25 +338,79 @@ class CommentResource(Resource):
         return {"message": "Comment deleted"}, 200
 
 class CheerListResource(Resource):
-    """Resource for listing all cheers."""
     def get(self):
-        cheers = Cheer.query.all()
+        gp_id = request.args.get("goal_progress_id", type=int)
+        goal_id = request.args.get("goal_id", type=int)
+
+        query = Cheer.query
+        if gp_id:
+            query = query.filter_by(goal_progress_id=gp_id)
+        elif goal_id:
+            # join to GoalProgress to retrieve cheers for any progress of a goal
+            query = query.join(GoalProgress, Cheer.goal_progress_id == GoalProgress.id).filter(GoalProgress.goal_id == goal_id)
+
+        cheers = query.order_by(Cheer.created_at.asc()).all()
         return cheers_schema.dump(cheers), 200
 
     @jwt_required()
     def post(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('user_id', type=int, required=True)
-        parser.add_argument('goal_progress_id', type=int, required=True)
-        args = parser.parse_args()
+        data = request.get_json() or {}
+        gp_id = data.get("goal_progress_id")
+        goal_id = data.get("goal_id")
 
-        cheer = Cheer(
-            user_id=args['user_id'],
-            goal_progress_id=args['goal_progress_id']
-        )
+        # Must provide either a progress id or a goal id
+        if not gp_id and not goal_id:
+            return {"message": "goal_progress_id or goal_id is required"}, 400
+
+        # If no gp_id provided, validate goal and create a minimal GoalProgress
+        if not gp_id:
+            goal = Goal.query.get(goal_id)
+            if not goal:
+                return {"message": "Goal not found"}, 404
+
+            gp = GoalProgress(
+                goal_id=goal.id,
+                date=date.today(),            # required field in your model
+                note="Auto-created for cheer",
+                xp_earned=0
+            )
+            db.session.add(gp)
+            db.session.commit()
+            gp_id = gp.id
+
+        # get user id from JWT
+        identity = get_jwt_identity()
+        if isinstance(identity, int):
+            user_id = identity
+        elif isinstance(identity, dict):
+            user_id = identity.get("id")
+        else:
+            user_id = identity
+
+        if not user_id:
+            return {"message": "Invalid user identity"}, 401
+
+        # prevent duplicate cheer by same user on same progress
+        existing = Cheer.query.filter_by(user_id=user_id, goal_progress_id=gp_id).first()
+        if existing:
+            # return existing cheer (200) — frontend will treat this as idempotent
+            cheer_obj = cheer_schema.dump(existing)
+            # attach helpful extras
+            cheer_count = Cheer.query.filter_by(goal_progress_id=gp_id).count()
+            cheer_obj.update({"goal_progress_id": gp_id, "cheer_count": cheer_count})
+            return cheer_obj, 200
+
+        # create cheer
+        cheer = Cheer(user_id=user_id, goal_progress_id=gp_id, created_at=datetime.utcnow())
         db.session.add(cheer)
         db.session.commit()
-        return cheer_schema.dump(cheer), 201
+
+        # compute new total for convenience
+        cheer_count = Cheer.query.filter_by(goal_progress_id=gp_id).count()
+
+        response = cheer_schema.dump(cheer)
+        response.update({"goal_progress_id": gp_id, "cheer_count": cheer_count})
+        return response, 201
 
 class CheerResource(Resource):
     """Resource for retrieving, updating, or deleting a single cheer."""
