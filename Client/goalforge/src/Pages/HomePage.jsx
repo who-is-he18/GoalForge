@@ -59,7 +59,7 @@ const Avatar = ({ src, name }) => {
         />
       ) : (
         <img
-          src="https://i.pinimg.com/736x/c2/63/bc/c263bc7b94fed2341df4145c77ccb19b.jpg" // 👈 placeholder image
+          src="https://i.pinimg.com/736x/c2/63/bc/c263bc7b94fed2341df4145c77ccb19b.jpg" 
           alt={name || "User"}
           className="w-full h-full object-cover"
         />
@@ -179,55 +179,61 @@ const normalizeComment = (c) => ({
     fetchGoals();
   }, [fetchGoals]);
 
+  // only show goals NOT owned by the current user
+const otherGoals = useMemo(() => {
+  if (!currentUser || !currentUser.id) return goals; // if we don't know current user yet, show all until known
+  return goals.filter((g) => g.user_id !== currentUser.id);
+}, [goals, currentUser]);
+
+
   // ---------- Fetch all comments once goals arrive ----------
-  useEffect(() => {
-    if (!goals || goals.length === 0) return;
+useEffect(() => {
+  if (!otherGoals || otherGoals.length === 0) return;
 
-    const anyUnloaded = goals.some((g) => !g.comments_loaded);
-    if (!anyUnloaded) return;
+  const anyUnloaded = otherGoals.some((g) => !g.comments_loaded);
+  if (!anyUnloaded) return;
 
-    let mounted = true;
+  let mounted = true;
 
-    async function loadAllComments() {
-      try {
-        const promises = goals.map((g) =>
-          api
-            .get("/comments", {
-              params: g.progressId
-                ? { goal_progress_id: g.progressId }
-                : { goal_id: g.id },
-            })
-            .catch((err) => {
-              console.warn("comments fetch failed for goal", g.id, err);
-              return { data: [] };
-            })
-        );
-        const results = await Promise.all(promises);
-        if (!mounted) return;
+  async function loadAllComments() {
+    try {
+      const promises = otherGoals.map((g) =>
+        api
+          .get("/comments", {
+            params: g.progressId ? { goal_progress_id: g.progressId } : { goal_id: g.id },
+          })
+          .catch((err) => {
+            console.warn("comments fetch failed for goal", g.id, err);
+            return { data: [] };
+          })
+      );
+      const results = await Promise.all(promises);
+      if (!mounted) return;
 
-        const next = {};
-        goals.forEach((g, i) => {
-          const list = Array.isArray(results[i].data) ? results[i].data : [];
-          next[g.id] = list.map(normalizeComment);
-        });
+      const next = {};
+      otherGoals.forEach((g, i) => {
+        const list = Array.isArray(results[i].data) ? results[i].data : [];
+        next[g.id] = list.map(normalizeComment);
+      });
 
-        // Only update commentsByGoal once
-        setCommentsByGoal((prev) => ({ ...next, ...prev }));
+      // Only update commentsByGoal once
+      setCommentsByGoal((prev) => ({ ...next, ...prev }));
 
-        // Mark only those goals that are not yet marked as loaded.
-        setGoals((prev) =>
-          prev.map((g) => (g.comments_loaded ? g : { ...g, comments_loaded: true }))
-        );
-      } catch (err) {
-        console.error("Failed to load comments for all goals", err);
-      }
+      // Mark only those goals that are not yet marked as loaded.
+      setGoals((prev) =>
+        prev.map((g) => (g.comments_loaded ? g : { ...g, comments_loaded: true }))
+      );
+    } catch (err) {
+      console.error("Failed to load comments for all goals", err);
     }
+  }
 
-    loadAllComments();
-    return () => {
-      mounted = false;
-    };
-  }, [goals]);
+  loadAllComments();
+  return () => {
+    mounted = false;
+  };
+}, [otherGoals]); // <-- note dependency changed to otherGoals
+
 
   // Keep each goal.comments (#) in sync with the commentsByGoal array length
   useEffect(() => {
@@ -248,26 +254,27 @@ const normalizeComment = (c) => ({
     return () => clearTimeout(t);
   }, [query]);
 
-  const tags = useMemo(() => {
-    const setTags = new Set(goals.map((g) => g.category || "General"));
-    return ["All", ...Array.from(setTags)];
-  }, [goals]);
+const tags = useMemo(() => {
+  const setTags = new Set(otherGoals.map((g) => g.category || "General"));
+  return ["All", ...Array.from(setTags)];
+}, [otherGoals]);
 
-  const filtered = useMemo(() => {
-    const q = debouncedQuery.trim().toLowerCase();
-    let out = goals.filter((g) => {
-      if (category !== "All" && (g.category || "General") !== category) return false;
-      if (!q) return true;
-      const hay = `${g.author} ${g.handle} ${g.title} ${g.description}`.toLowerCase();
-      return hay.includes(q);
-    });
+const filtered = useMemo(() => {
+  const q = debouncedQuery.trim().toLowerCase();
+  let out = otherGoals.filter((g) => {
+    if (category !== "All" && (g.category || "General") !== category) return false;
+    if (!q) return true;
+    const hay = `${g.author} ${g.handle} ${g.title} ${g.description}`.toLowerCase();
+    return hay.includes(q);
+  });
 
-    if (sortBy === "Newest") out = out.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    else if (sortBy === "Oldest") out = out.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    else if (sortBy === "Trending") out = out.slice().sort((a, b) => (b.cheers || 0) - (a.cheers || 0));
+  if (sortBy === "Newest") out = out.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  else if (sortBy === "Oldest") out = out.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  else if (sortBy === "Trending") out = out.slice().sort((a, b) => (b.cheers || 0) - (a.cheers || 0));
 
-    return out;
-  }, [goals, debouncedQuery, category, sortBy]);
+  return out;
+}, [otherGoals, debouncedQuery, category, sortBy]);
+
 
   function handleClear() {
     setQuery("");

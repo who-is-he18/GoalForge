@@ -154,6 +154,51 @@ class GoalResource(Resource):
 
         db.session.commit()
         return goal_schema.dump(goal), 200
+    
+    @jwt_required()
+    def patch(self, goal_id):
+        """
+        Partial update — accept JSON payload and update only provided fields.
+        Handles parsing of date strings for start_date/end_date.
+        """
+        goal = Goal.query.get_or_404(goal_id)
+        data = request.get_json() or {}
+
+        # helper to parse date strings (expects 'YYYY-MM-DD')
+        def parse_date_if_present(key):
+            val = data.get(key, None)
+            if val in (None, ""):
+                return None if val is None else None  # treat empty string as None (optional)
+            try:
+                return datetime.strptime(val, "%Y-%m-%d").date()
+            except Exception:
+                # you can choose to raise a 400 here; for now we'll ignore invalid date formats
+                return None
+
+        # Map incoming fields to model attributes
+        if "title" in data:
+            goal.title = data.get("title")
+        if "description" in data:
+            goal.description = data.get("description")
+        if "category" in data:
+            goal.category = data.get("category")
+        if "frequency" in data:
+            goal.frequency = data.get("frequency")
+        if "is_public" in data:
+            # ensure boolean conversion
+            goal.is_public = bool(data.get("is_public"))
+        if "start_date" in data:
+            parsed = parse_date_if_present("start_date")
+            if parsed is not None:
+                goal.start_date = parsed
+        if "end_date" in data:
+            parsed = parse_date_if_present("end_date")
+            # allow explicitly setting end_date to null/empty to remove it
+            goal.end_date = parsed
+
+        # add any other allowed fields you want to support (status etc.)
+        db.session.commit()
+        return goal_schema.dump(goal), 200
 
     @jwt_required()
     def delete(self, goal_id):
@@ -161,6 +206,7 @@ class GoalResource(Resource):
         db.session.delete(goal)
         db.session.commit()
         return {"message": "Goal deleted"}, 200
+    
 # ------------------- Goal Progress Resources -------------------
 
 class GoalProgressListResource(Resource):
@@ -192,7 +238,22 @@ class GoalProgressListResource(Resource):
 
         db.session.add(progress)
         db.session.commit()
-        return progress_single_schema.dump(progress), 201
+                # Recompute streaks for the parent goal
+        goal = Goal.query.get(progress.goal_id)
+        if goal:
+            # refresh relationship if lazy; ensure progress logs include the new one
+            db.session.refresh(goal)
+            cur_streak, longest = compute_streaks_for_goal(goal)
+            goal.streak_count = cur_streak
+            goal.longest_streak = max(goal.longest_streak or 0, longest)
+            db.session.commit()
+
+        # return the created progress and optionally the updated goal
+        return {
+            "progress": progress_single_schema.dump(progress),
+            "goal": goal_schema.dump(goal) if goal else None
+        }, 201
+
 
 class GoalProgressResource(Resource):
     """Resource for retrieving, updating, or deleting a single progress log."""
@@ -221,6 +282,8 @@ class GoalProgressResource(Resource):
     @jwt_required()
     def delete(self, progress_id):
         progress = GoalProgress.query.get_or_404(progress_id)
+        goal_id = progress.goal_id
+
 
         # Delete related cheers
         Cheer.query.filter_by(goal_progress_id=progress.id).delete()
@@ -230,8 +293,16 @@ class GoalProgressResource(Resource):
         db.session.delete(progress)
         db.session.commit()
 
-        return {"message": "Progress log and related data deleted successfully."}, 200
+ # recompute streaks for parent goal
+        goal = Goal.query.get(goal_id)
+        if goal:
+            cur_streak, longest = compute_streaks_for_goal(goal)
+            goal.streak_count = cur_streak
+            # longest_streak may need recomputation (not just max) — set to longest
+            goal.longest_streak = max(goal.longest_streak or 0, longest)
+            db.session.commit()
 
+        return {"message": "Progress log and related data deleted successfully."}, 200
 # ------------------- Other List Resources -------------------
 
 
@@ -645,3 +716,152 @@ class NotificationResource(Resource):
         db.session.commit()
         return {"message": "Notification deleted"}, 200
     
+from datetime import date, timedelta
+from collections import defaultdict
+
+def _dates_from_progress(progress_list):
+    # accept progress_list of GoalProgress objects or dicts with 'date' field
+    s = set()
+    for p in progress_list:
+        d = None
+        if hasattr(p, 'date'):
+            d = p.date
+        else:
+            d = p.get('date')
+            # if string, parse
+            if isinstance(d, str):
+                d = datetime.strptime(d[:10], "%Y-%m-%d").date()
+        if d:
+            s.add(d)
+    return sorted(s)
+
+def compute_daily_streaks(dates_sorted):
+    """Given sorted unique date objects, return (current_streak, longest_streak).
+       current_streak counts up to today (inclusive if there's a log today)."""
+    if not dates_sorted:
+        return 0, 0
+
+    today = date.today()
+    longest = 0
+    current = 0
+
+    # compute longest streak
+    temp = 1
+    for i in range(1, len(dates_sorted)):
+        if (dates_sorted[i] - dates_sorted[i-1]).days == 1:
+            temp += 1
+        else:
+            if temp > longest:
+                longest = temp
+            temp = 1
+    if temp > longest:
+        longest = temp
+
+    # compute current streak (walk backward from the most recent date)
+    last = dates_sorted[-1]
+    if last > today:
+        # future-dated entries possible; ignore those beyond today for current streak
+        # filter to <= today
+        dates_sorted = [d for d in dates_sorted if d <= today]
+        if not dates_sorted:
+            return 0, longest
+        last = dates_sorted[-1]
+
+    # now count consecutive days backward from last while days difference == 1
+    cur = 1
+    i = len(dates_sorted) - 1
+    while i > 0:
+        if (dates_sorted[i] - dates_sorted[i-1]).days == 1:
+            cur += 1
+            i -= 1
+        else:
+            break
+
+    # If the most recent log is not today or yesterday, current streak may be 1
+    # but should only count up to today if last is today. We treat current streak as consecutive
+    # days ending at the last logged date (common approach).
+    return cur, longest
+
+def compute_weekly_streaks(dates_sorted):
+    # Convert to ISO week numbers and compute consecutive week streaks.
+    if not dates_sorted:
+        return 0, 0
+    weeks = sorted({(d.isocalendar()[0], d.isocalendar()[1]) for d in dates_sorted})
+    # weeks is set of (year, week)
+    weeks_sorted = sorted(weeks)
+    longest = 0
+    temp = 1
+    for i in range(1, len(weeks_sorted)):
+        y1, w1 = weeks_sorted[i-1]
+        y2, w2 = weeks_sorted[i]
+        # compute if consecutive by week number
+        prev = date.fromisocalendar(y1, w1, 1)
+        curr = date.fromisocalendar(y2, w2, 1)
+        if (curr - prev).days <= 7:  # next calendar week
+            temp += 1
+        else:
+            longest = max(longest, temp)
+            temp = 1
+    longest = max(longest, temp)
+
+    # current streak: count consecutive weeks up to last logged week
+    cur = 1
+    i = len(weeks_sorted) - 1
+    while i > 0:
+        y1, w1 = weeks_sorted[i-1]
+        y2, w2 = weeks_sorted[i]
+        prev = date.fromisocalendar(y1, w1, 1)
+        curr = date.fromisocalendar(y2, w2, 1)
+        if (curr - prev).days <= 7:
+            cur += 1
+            i -= 1
+        else:
+            break
+    return cur, longest
+
+def compute_monthly_streaks(dates_sorted):
+    if not dates_sorted:
+        return 0, 0
+    months = sorted({(d.year, d.month) for d in dates_sorted})
+    longest = 0
+    temp = 1
+    for i in range(1, len(months)):
+        y1, m1 = months[i-1]
+        y2, m2 = months[i]
+        # consecutive months logic
+        if (y2 == y1 and m2 == m1 + 1) or (y2 == y1 + 1 and m1 == 12 and m2 == 1):
+            temp += 1
+        else:
+            longest = max(longest, temp)
+            temp = 1
+    longest = max(longest, temp)
+
+    cur = 1
+    i = len(months) - 1
+    while i > 0:
+        y1, m1 = months[i-1]
+        y2, m2 = months[i]
+        if (y2 == y1 and m2 == m1 + 1) or (y2 == y1 + 1 and m1 == 12 and m2 == 1):
+            cur += 1
+            i -= 1
+        else:
+            break
+    return cur, longest
+
+def compute_streaks_for_goal(goal):
+    """Given a Goal object, compute (current_streak, longest_streak) based on progress_logs."""
+    # gather unique date objects from goal.progress_logs
+    progress_list = getattr(goal, "progress_logs", []) or []
+    dates_sorted = _dates_from_progress(progress_list)
+    if not dates_sorted:
+        return 0, 0
+    freq = (goal.frequency or "daily").lower()
+    if freq.startswith("daily"):
+        return compute_daily_streaks(dates_sorted)
+    elif freq.startswith("week"):
+        return compute_weekly_streaks(dates_sorted)
+    elif freq.startswith("month"):
+        return compute_monthly_streaks(dates_sorted)
+    else:
+        # default to daily
+        return compute_daily_streaks(dates_sorted)

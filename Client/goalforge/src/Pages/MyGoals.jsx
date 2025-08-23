@@ -1,8 +1,8 @@
 // MyGoalsWithEditModal.jsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { HiOutlineEye, HiOutlinePencil, HiOutlineTrash } from "react-icons/hi";
-
+import api from "../api";
 
 /* ---------- Icons ---------- */
 const PlusIcon = () => (
@@ -10,22 +10,9 @@ const PlusIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
   </svg>
 );
-
-const IconStreak = () => (
-  <svg className="w-5 h-5 inline-block mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 2C8 6 4 7 4 11c0 5 8 11 8 11s8-6 8-11c0-4-4-5-8-9z" fill="#FB923C"/>
-  </svg>
-);
-const IconXP = () => (
-  <svg className="w-5 h-5 inline-block mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7l3-7z" fill="#8B5CF6"/>
-  </svg>
-);
-const IconFollowers = () => (
-  <svg className="w-5 h-5 inline-block mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 12a4 4 0 100-8 4 4 0 000 8zM4 20a8 8 0 0116 0H4z" fill="#06B6D4"/>
-  </svg>
-);
+const IconStreak = () => (/* ...same as before... */ <svg className="w-5 h-5 inline-block mr-2" viewBox="0 0 24 24" fill="none"><path d="M12 2C8 6 4 7 4 11c0 5 8 11 8 11s8-6 8-11c0-4-4-5-8-9z" fill="#FB923C"/></svg>);
+const IconXP = () => (/* ... */ <svg className="w-5 h-5 inline-block mr-2" viewBox="0 0 24 24" fill="none"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7l3-7z" fill="#8B5CF6"/></svg>);
+const IconFollowers = () => (/* ... */ <svg className="w-5 h-5 inline-block mr-2" viewBox="0 0 24 24" fill="none"><path d="M12 12a4 4 0 100-8 4 4 0 000 8zM4 20a8 8 0 0116 0H4z" fill="#06B6D4"/></svg>);
 
 /* ---------- Category badge ---------- */
 function CategoryBadge({ category }) {
@@ -39,199 +26,7 @@ function CategoryBadge({ category }) {
   return <span className={`text-xs px-2 py-0.5 rounded-md ${map[category] || "bg-gray-50 text-gray-700 border border-gray-100"}`}>{category}</span>;
 }
 
-/* ---------- Dummy sample data (so this file runs standalone) ---------- */
-const sampleGoals = [
-  {
-    id: 6,
-    title: "Read 20 Pages a Day",
-    category: "Habit",
-    description: "Finish more books and expand knowledge",
-    streak: 5,
-    xp: 120,
-    followers: 4,
-    progress: 22,
-    status: "completed",
-    isPublic: true,
-
-    author: "Alex Johnson",
-    handle: "@alex_reads",
-    frequency: "daily",
-    start_date: "2025-01-10",
-    end_date: "2025-06-10",
-    tag: "Learning",
-    timeAgo: "30d ago",
-    content: "Just finished 'Atomic Habits' — feeling motivated!",
-    image: "https://images.unsplash.com/photo-1512820790803-83ca734da794", // book photo
-    totalDays: 50,
-    createdAt: "2025-01-10T08:00:00Z",
-    likes: 45,
-    comments: 12,
-    liked: false,
-    progress_logs: [
-      {
-        id: 601,
-        goal_id: 6,
-        date: "2025-01-15",
-        note: "Read 'Deep Work' for 25 minutes. Great insights.",
-        media_url: "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f",
-        xp_earned: 5,
-        created_at: "2025-01-15T09:00:00Z"
-      },
-      {
-        id: 602,
-        goal_id: 6,
-        date: "2025-02-01",
-        note: "Finished 'The Alchemist' in 3 days!",
-        media_url: "https://images.unsplash.com/photo-1471102204082-0d7a5be3d9a5",
-        xp_earned: 10,
-        created_at: "2025-02-01T14:30:00Z"
-      }
-    ]
-  },
-  {
-    id: 7,
-    title: "Cook a New Recipe Weekly",
-    category: "Lifestyle",
-    description: "Experiment with different cuisines every week to expand cooking skills.",
-    streak: 6,
-    xp: 140,
-    followers: 7,
-    progress: 40,
-    status: "active",
-    isPublic: false,
-
-    author: "Samantha Lee",
-    handle: "@samcooks",
-    frequency: "weekly",
-    start_date: "2025-03-01",
-    end_date: "2025-09-01",
-    tag: "Creativity",
-    timeAgo: "14d ago",
-    content: "Perfected a homemade sourdough loaf today!",
-    image: "https://images.unsplash.com/photo-1606787366850-de6330128bfc",
-    totalDays: 14,
-    createdAt: "2025-03-01T10:00:00Z",
-    likes: 74,
-    comments: 15,
-    liked: true,
-    progress_logs: [
-      {
-        id: 701,
-        goal_id: 7,
-        date: "2025-03-05",
-        note: "Tried Indian butter chicken—rich and flavorful.",
-        media_url: "https://images.unsplash.com/photo-1617196039897-99a9ee1e5d49",
-        xp_earned: 7,
-        created_at: "2025-03-05T17:00:00Z"
-      },
-      {
-        id: 702,
-        goal_id: 7,
-        date: "2025-03-12",
-        note: "Cooked authentic Spanish paella—lots of seafood!",
-        media_url: "https://images.unsplash.com/photo-1607270999456-f83c7d9d7d74",
-        xp_earned: 9,
-        created_at: "2025-03-12T18:15:00Z"
-      }
-    ]
-  },
-  {
-    id: 8,
-    title: "Read 20 Pages a Day",
-    category: "Habit",
-    description: "Finish more books and expand knowledge",
-    streak: 8,
-    xp: 200,
-    followers: 10,
-    progress: 60,
-    status: "active",
-    isPublic: true,
-
-    author: "Michael Chen",
-    handle: "@mike_reads",
-    frequency: "daily",
-    start_date: "2025-02-01",
-    end_date: "2025-08-01",
-    tag: "Self-Improvement",
-    timeAgo: "7d ago",
-    content: "Dived into 'Sapiens' — mind-blowing so far.",
-    image: "https://images.unsplash.com/photo-1516979187457-637abb4f9353",
-    totalDays: 100,
-    createdAt: "2025-02-01T09:00:00Z",
-    likes: 80,
-    comments: 20,
-    liked: false,
-    progress_logs: [
-      {
-        id: 801,
-        goal_id: 8,
-        date: "2025-02-10",
-        note: "Read 30 pages of 'Thinking, Fast and Slow'.",
-        media_url: "https://images.unsplash.com/photo-1581091215367-70d3b7e63b29",
-        xp_earned: 8,
-        created_at: "2025-02-10T10:00:00Z"
-      },
-      {
-        id: 802,
-        goal_id: 8,
-        date: "2025-03-01",
-        note: "Completed 'Man’s Search for Meaning'.",
-        media_url: "https://images.unsplash.com/photo-1602526434204-f7d2f6a8a4a6",
-        xp_earned: 12,
-        created_at: "2025-03-01T12:30:00Z"
-      }
-    ]
-  },
-  {
-    id: 9,
-    title: "Cook a New Recipe Weekly",
-    category: "Lifestyle",
-    description: "Experiment with different cuisines every week to expand cooking skills.",
-    streak: 4,
-    xp: 100,
-    followers: 5,
-    progress: 18,
-    status: "completed",
-    isPublic: false,
-
-    author: "Emma Davis",
-    handle: "@emmacooks",
-    frequency: "weekly",
-    start_date: "2025-04-01",
-    end_date: "2025-09-01",
-    tag: "Cooking",
-    timeAgo: "2d ago",
-    content: "Mastered homemade sushi rolls—so fun to make!",
-    image: "https://images.unsplash.com/photo-1553621042-f6e147245754",
-    totalDays: 12,
-    createdAt: "2025-04-01T10:00:00Z",
-    likes: 90,
-    comments: 18,
-    liked: true,
-    progress_logs: [
-      {
-        id: 901,
-        goal_id: 9,
-        date: "2025-04-05",
-        note: "Tried making mac and cheese with truffle oil.",
-        media_url: "https://images.unsplash.com/photo-1543353071-087092ec393b",
-        xp_earned: 6,
-        created_at: "2025-04-05T17:00:00Z"
-      },
-      {
-        id: 902,
-        goal_id: 9,
-        date: "2025-04-12",
-        note: "Cooked beef bourguignon — slow but worth it.",
-        media_url: "https://images.unsplash.com/photo-1562967916-eb82221dfb30",
-        xp_earned: 9,
-        created_at: "2025-04-12T18:20:00Z"
-      }
-    ]
-  }
-];
-
-/* ---------- Edit Modal Component ---------- */
+/* ---------- Edit Modal Component (unchanged) ---------- */
 function EditGoalModal({ open, onClose, goal, onSave }) {
   const [form, setForm] = useState(() => ({
     title: "",
@@ -244,7 +39,6 @@ function EditGoalModal({ open, onClose, goal, onSave }) {
     status: "active",
   }));
 
-  // sync when modal opens or goal changes
   React.useEffect(() => {
     if (open && goal) {
       setForm({
@@ -269,51 +63,36 @@ function EditGoalModal({ open, onClose, goal, onSave }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    // build updated object; preserve other fields from goal
     const updated = { ...goal, ...form };
     onSave(updated);
   }
 
   return (
-    // modal backdrop
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-black/40 p-4">
       <div className="bg-white w-full max-w-2xl rounded-lg shadow-xl mt-12">
-        {/* header */}
         <div className="flex flex-col px-6 py-4">
-  <div className="flex items-center justify-between">
-    <h2 className="text-lg font-bold">Edit Goal</h2>
-    <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
-  </div>
-  <p className="text-sm text-gray-500 mt-1">
-    Make changes to your goal. Click save when you're done.
-  </p>
-</div>
-
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold">Edit Goal</h2>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+          </div>
+          <p className="text-sm text-gray-500 mt-1">Make changes to your goal. Click save when you're done.</p>
+        </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 max-h-[80vh] overflow-auto">
-
           <div className="grid grid-cols-1 gap-4">
             <div>
               <label className="text-sm font-bold block mb-1">Goal Title *</label>
-              <input name="title" value={form.title} onChange={handleChange}className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:ring-0"
-required />
+              <input name="title" value={form.title} onChange={handleChange} className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:ring-0" required />
             </div>
-
             <div>
               <label className="text-sm font-bold block mb-1">Description (Optional)</label>
-<textarea
-  name="description"
-  value={form.description}
-  onChange={handleChange}
-className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:ring-0"  rows={3}
-/>
+              <textarea name="description" value={form.description} onChange={handleChange} className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:ring-0" rows={3} />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-bold block mb-1">Category</label>
-                <select name="category" value={form.category} onChange={handleChange} className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:ring-0"
- >
+                <select name="category" value={form.category} onChange={handleChange} className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:ring-0">
                   <option>Fitness</option>
                   <option>Skill</option>
                   <option>Health</option>
@@ -321,11 +100,9 @@ className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:r
                   <option>Lifestyle</option>
                 </select>
               </div>
-
               <div>
                 <label className="text-sm font-bold block mb-1">Frequency</label>
-                <select name="frequency" value={form.frequency} onChange={handleChange}  className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:ring-0"
- >
+                <select name="frequency" value={form.frequency} onChange={handleChange} className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:ring-0">
                   <option>Daily</option>
                   <option>Weekly</option>
                   <option>Monthly</option>
@@ -336,13 +113,11 @@ className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:r
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-bold block mb-1">Start Date *</label>
-                <input name="start_date" value={form.start_date} onChange={handleChange} type="date"   className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:ring-0"
- />
+                <input name="start_date" value={form.start_date} onChange={handleChange} type="date" className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:ring-0" />
               </div>
               <div>
                 <label className="text-sm font-bold block mb-1">End Date (Optional)</label>
-                <input name="end_date" value={form.end_date} onChange={handleChange} type="date"   className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:ring-0"
- />
+                <input name="end_date" value={form.end_date} onChange={handleChange} type="date" className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:ring-0" />
               </div>
             </div>
 
@@ -354,14 +129,11 @@ className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:r
                   <div className="text-xs text-gray-500">Public goals can be seen by other users and appear in the community feed</div>
                 </div>
               </label>
-
-              
             </div>
           </div>
 
-          {/* footer actions */}
           <div className="mt-6 flex items-center justify-end gap-3 border-t pt-4">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-md bg-white border border-gray-300 text-sm font-bold" >Cancel</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-md bg-white border border-gray-300 text-sm font-bold">Cancel</button>
             <button type="submit" className="px-4 py-2 rounded-md bg-black text-white text-sm font-bold">Save Changes</button>
           </div>
         </form>
@@ -369,31 +141,336 @@ className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:r
     </div>
   );
 }
+// ---------- helpers (add near top of file) ----------
+function daysBetweenInclusive(a, b) {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const da = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const db = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.max(0, Math.round((db - da) / msPerDay)) + 1; // inclusive
+}
+
+function weeksBetweenInclusive(a, b) {
+  // count calendar weeks (floor of days/7) but ensure at least 1 if same week
+  const days = daysBetweenInclusive(a, b);
+  return Math.max(1, Math.ceil(days / 7));
+}
+
+function monthsBetweenInclusive(a, b) {
+  // count months inclusive, e.g. Feb1 -> Apr1 = 3 months
+  let months = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + 1;
+  return Math.max(1, months);
+}
+
+// compute expected periods for a goal between start and end (or today if no end)
+function computeTotalPeriodsForGoal(goal) {
+  // parse date strings safely
+  const parseDate = (d) => (d ? new Date(d) : null);
+  const start = parseDate(goal.start_date || goal.raw?.start_date);
+  if (!start || Number.isNaN(start.getTime())) return 0;
+
+  const endRaw = goal.end_date || goal.raw?.end_date;
+  const now = new Date();
+  const end = endRaw ? new Date(endRaw) : now;
+
+  const freq = (goal.frequency || goal.raw?.frequency || "Daily").toLowerCase();
+  if (freq.startsWith("daily")) {
+    return daysBetweenInclusive(start, end);
+  } else if (freq.startsWith("week")) {
+    return weeksBetweenInclusive(start, end);
+  } else if (freq.startsWith("month")) {
+    return monthsBetweenInclusive(start, end);
+  } else {
+    // fallback to days
+    return daysBetweenInclusive(start, end);
+  }
+}
+
+/* ---------- normalize backend goal -> UI goal ---------- */
+// normalize backend goal -> UI goal (fixed status logic)
+function normalizeGoal(apiGoal) {
+  const parseDateOnly = (d) => {
+    if (!d) return null;
+    // Accept Date object or date string
+    const dt = typeof d === "string" ? new Date(d) : d;
+    if (Number.isNaN(dt.getTime && dt.getTime())) return null;
+    // Normalize to local date (strip time)
+    return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  };
+
+  const today = (() => {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  })();
+
+  const endDateObj = parseDateOnly(apiGoal.end_date || apiGoal.endDate || apiGoal.endDateAt);
+
+  // status: completed only if end_date exists AND it is strictly before today
+  const status = apiGoal.status
+    ? apiGoal.status
+    : endDateObj && endDateObj < today
+    ? "completed"
+    : "active";
+
+  return {
+    id: apiGoal.id,
+    title: apiGoal.title,
+    description: apiGoal.description,
+    category: apiGoal.category || "General",
+    start_date: apiGoal.start_date || apiGoal.startDate || "",
+    end_date: apiGoal.end_date || apiGoal.endDate || null,
+    frequency: apiGoal.frequency || "Daily",
+    isPublic: apiGoal.is_public ?? apiGoal.isPublic ?? false,
+    status,
+    streak: `${apiGoal.streak_count || 0} day streak`,
+    xp: apiGoal.xp || 0,
+    followers: apiGoal.followers || 0,
+    progress: apiGoal.progress_percent ?? apiGoal.progress ?? 0,
+    user_id: apiGoal.user?.id ?? apiGoal.user_id,
+    raw: apiGoal,
+  };
+}
+
 
 /* ---------- Main Page Component ---------- */
-export default function MyGoals() {
+export default function MyGoals({ currentUser }) {
   const navigate = useNavigate();
-  const [goals, setGoals] = useState(sampleGoals);
+  const [goals, setGoals] = useState([]);
   const [activeTab, setActiveTab] = useState("active"); // 'active' | 'completed' | 'all'
 
-  // modal state
   const [editingGoal, setEditingGoal] = useState(null);
   const [isModalOpen, setModalOpen] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const visibleGoals = useMemo(() => {
     if (activeTab === "all") return goals;
     return goals.filter((g) => g.status === activeTab);
   }, [goals, activeTab]);
 
-  function togglePublic(id) {
-    setGoals((prev) => prev.map((g) => g.id === id ? { ...g, isPublic: !g.isPublic } : g));
-    // Note: persist to backend later
+  // ---------- Fetch the current user's goals (robust) ----------
+  const fetchGoals = useCallback(async () => {
+    if (!currentUser || !currentUser.id) {
+      setGoals([]);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      // Primary attempt: ask backend for this user's goals
+      const res = await api.get("/goals", { params: { user_id: currentUser.id } });
+
+      // Normalize different possible response shapes
+      const rawArr = Array.isArray(res.data)
+        ? res.data
+        : Array.isArray(res.data?.goals)
+        ? res.data.goals
+        : typeof res.data === "object" && res.data !== null && Array.isArray(res.data.data)
+        ? res.data.data
+        : [];
+
+      // Filter client-side to be 100% sure we only keep goals owned by currentUser
+      const owned = rawArr.filter((g) => {
+        const ownerId = g.user?.id ?? g.user_id ?? g.userId ?? null;
+        return ownerId === currentUser.id;
+      });
+
+      const normalized = owned.map(normalizeGoal);
+      setGoals(normalized);
+      fetchProgressAndApply(normalized);
+
+    } catch (err) {
+      console.error("Failed to fetch my goals", err);
+      setError("Failed to load your goals.");
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    fetchGoals();
+  }, [fetchGoals]);
+// fetch a single goal and upsert into state
+const fetchGoalById = useCallback(async (id) => {
+  if (!id) return;
+  try {
+    const res = await api.get(`/goals/${id}`);
+    const raw = res.data;
+    const normalized = normalizeGoal(raw);
+    setGoals((prev) => {
+      // if goal exists, replace it; otherwise append to front
+      const found = prev.some((g) => g.id === normalized.id);
+      if (found) return prev.map((g) => (g.id === normalized.id ? { ...g, ...normalized } : g));
+      return [normalized, ...prev];
+    });
+    fetchProgressAndApply([normalized]);
+  } catch (err) {
+    console.error("Failed to fetch single goal", id, err);
+    // optional: fallback to re-fetch all goals
+    // fetchGoals();
+  }
+}, [/* no deps or include normalizeGoal/fetchGoals if defined externally */]);
+
+
+useEffect(() => {
+  const handler = (e) => {
+    const id = e?.detail?.goalId;
+    if (!id) return;
+    // update only the changed goal
+    fetchGoalById(id);
+  };
+  window.addEventListener("progressCreated", handler);
+  return () => window.removeEventListener("progressCreated", handler);
+}, [fetchGoalById]);
+
+useEffect(() => {
+  const onGoalUpdated = (e) => {
+    const raw = e?.detail?.goal;
+    if (!raw) return;
+    const normalized = normalizeGoal(raw);
+    setGoals(prev => prev.map(g => g.id === normalized.id ? { ...g, ...normalized } : g));
+  };
+
+  const onProgressCreated = (e) => {
+    const id = e?.detail?.goalId;
+    if (!id) return;
+    fetchGoalById(id); // fallback if server didn't return goal
+  };
+
+  window.addEventListener("goalUpdated", onGoalUpdated);
+  window.addEventListener("progressCreated", onProgressCreated);
+  return () => {
+    window.removeEventListener("goalUpdated", onGoalUpdated);
+    window.removeEventListener("progressCreated", onProgressCreated);
+  };
+}, [fetchGoalById]);
+
+
+// ---------- after fetchGoals(), fetch progress logs and compute per-goal metrics ----------
+// ---------- after fetchGoals(), fetch progress logs and compute per-goal metrics ----------
+const fetchProgressAndApply = useCallback(async (goalsArr) => {
+  if (!goalsArr || goalsArr.length === 0) return;
+
+  try {
+    // fetch progress logs (prefer server-side filtering if available)
+    // If your API supports filtering, do: api.get('/progress', { params: { goal_id: [id1,id2] } })
+    const res = await api.get("/progress");
+    const rawProgress = Array.isArray(res.data) ? res.data : res.data?.progress || [];
+
+    // Build map: goalId -> list of progress records
+    const progressMap = rawProgress.reduce((acc, p) => {
+      if (!p || p.goal_id == null) return acc;
+      if (!acc[p.goal_id]) acc[p.goal_id] = [];
+      acc[p.goal_id].push(p);
+      return acc;
+    }, {});
+
+    // collect IDs that reached completion this run so we can persist them
+    const toMarkCompleted = [];
+
+    // Update each goal with computed progress percent and total xp
+    setGoals((prevGoals) =>
+      prevGoals.map((g) => {
+        const records = progressMap[g.id] || [];
+
+        // distinct dates logged (use date string only)
+        const uniqueDates = new Set(records.map((r) => (r.date ? r.date.split("T")[0] : String(r.date))));
+        const entriesCount = uniqueDates.size;
+
+        // total XP from those records
+        const totalXp = records.reduce((s, r) => s + (Number(r.xp_earned) || 0), 0);
+
+        const totalPeriods = computeTotalPeriodsForGoal(g);
+        const progressPct = totalPeriods > 0 ? Math.round((entriesCount / totalPeriods) * 100) : 0;
+        const boundedProgress = Math.min(100, Math.max(0, progressPct));
+
+        // If we reached 100% and goal isn't already completed, mark it locally and queue for backend update
+        const newStatus = boundedProgress >= 100 ? "completed" : g.status;
+        if (boundedProgress >= 100 && g.status !== "completed") {
+          toMarkCompleted.push(g.id);
+        }
+
+        return {
+          ...g,
+          progress: boundedProgress,
+          xp: totalXp,
+          progress_logs: records,
+          status: newStatus,
+        };
+      })
+    );
+
+    // persist status changes for newly completed goals (non-blocking UI)
+    if (toMarkCompleted.length > 0) {
+      // fire-and-forget but await so we can refresh each updated goal afterwards
+      await Promise.all(
+        toMarkCompleted.map(async (id) => {
+          try {
+            await api.patch(`/goals/${id}`, { status: "completed" });
+            // refresh authoritative goal data (progress/xp comes from progress endpoint)
+            if (typeof fetchGoalById === "function") {
+              fetchGoalById(id);
+            }
+          } catch (err) {
+            // don't crash UI on failure — log for debugging
+            console.error("Failed to persist completed status for goal", id, err);
+          }
+        })
+      );
+    }
+  } catch (err) {
+    console.error("Failed to fetch progress logs:", err);
+    // if fetch fails we don't block the goals UI; optionally set an error state
+  }
+}, [fetchGoalById]);
+
+
+
+  // toggle public (optimistic)
+// Replace your current togglePublic with this
+async function togglePublic(id) {
+  const before = goals.find((g) => g.id === id);
+  if (!before) return;
+
+  // optimistic UI flip
+  setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, isPublic: !g.isPublic } : g)));
+
+  try {
+    const res = await api.patch(`/goals/${id}`, { is_public: !before.isPublic });
+    const updated = normalizeGoal(
+      res.data || { ...(before?.raw || {}), is_public: !before.isPublic }
+    );
+
+    // merge server response while preserving computed fields like progress/xp/logs
+    setGoals((prev) =>
+      prev.map((g) => {
+        if (g.id !== id) return g;
+        return {
+          ...g, // keep existing computed props by default
+          ...updated, // overwrite with server-sent fields
+          progress: g.progress ?? updated.progress ?? 0,
+          xp: g.xp ?? updated.xp ?? 0,
+          progress_logs: g.progress_logs ?? updated.progress_logs ?? [],
+        };
+      })
+    );
+  } catch (err) {
+    console.error("Failed to toggle public", err);
+    // revert optimistic change
+    setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, isPublic: before.isPublic } : g)));
+  }
+}
+
+
+  function logProgress(id) {
+    navigate(`/log-progress/${id}`);
+  }
+  function viewGoal(id) {
+    navigate(`/goal/${id}`, { state: { goal: goals.find(g => g.id === id) } });
   }
 
-  function logProgress(id) { alert("Log Progress clicked for goal id " + id + " (not implemented)"); }
-  function viewGoal(id) { alert("View " + id); }
-
-  // open modal and pass goal
   function editGoal(id) {
     const g = goals.find((x) => x.id === id);
     if (!g) return;
@@ -401,53 +478,76 @@ export default function MyGoals() {
     setModalOpen(true);
   }
 
-  function handleDelete(id) {
+  async function handleDelete(id) {
     if (!confirm("Delete this goal?")) return;
-    setGoals((prev) => prev.filter((g) => g.id !== id));
+    const prev = goals;
+    setGoals((p) => p.filter((g) => g.id !== id));
+    try {
+      await api.delete(`/goals/${id}`);
+    } catch (err) {
+      console.error("Delete failed", err);
+      setGoals(prev);
+      alert("Failed to delete goal.");
+    }
   }
 
-  // save updated goal from modal
-  function handleSave(updatedGoal) {
-    setGoals((prev) => prev.map((g) => (g.id === updatedGoal.id ? { ...g, ...updatedGoal } : g)));
+async function handleSave(updatedGoal) {
+  setIsSaving(true);
+  try {
+    const payload = {
+      title: updatedGoal.title,
+      description: updatedGoal.description,
+      category: updatedGoal.category,
+      start_date: updatedGoal.start_date,
+      end_date: updatedGoal.end_date,
+      frequency: updatedGoal.frequency,
+      is_public: !!updatedGoal.isPublic,
+      status: updatedGoal.status,
+    };
+    const res = await api.patch(`/goals/${updatedGoal.id}`, payload);
+    const saved = normalizeGoal(res.data || { ...updatedGoal, is_public: payload.is_public });
+
+    // Merge saved with existing computed fields so progress/xp don't disappear
+    setGoals((prev) =>
+      prev.map((g) => {
+        if (g.id !== saved.id) return g;
+        return {
+          ...g,           // keep existing computed props by default
+          ...saved,       // overwrite with server-sent fields
+          progress: g.progress ?? saved.progress ?? 0,
+          xp: g.xp ?? saved.xp ?? 0,
+          progress_logs: g.progress_logs ?? saved.progress_logs ?? [],
+        };
+      })
+    );
+
     setModalOpen(false);
     setEditingGoal(null);
+  } catch (err) {
+    console.error("Save failed", err);
+    alert("Failed to save changes.");
+  } finally {
+    setIsSaving(false);
   }
+}
+
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-                <button
-      onClick={() => navigate(-1)}
-      className="text-sm text-gray-600 flex items-center gap-2"
-    >
-      <svg
-        className="w-5 h-5"
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M15 18l-6-6 6-6"
-          stroke="#111827"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <span className="text-sm">Back</span>
-    </button>
+            <button onClick={() => navigate(-1)} className="text-sm text-gray-600 flex items-center gap-2">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="#111827" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <span className="text-sm">Back</span>
+            </button>
             <h1 className="text-lg font-bold flex items-center gap-3">
               <div className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-sm font-bold">GF</div>
               My Goals
             </h1>
           </div>
 
-          <Link
-            to="/create-goal"
-            className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md shadow hover:bg-white-100 transition-colors"
-          >
+          <Link to="/create-goal" className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md shadow hover:bg-white-100 transition-colors">
             <span className="hidden sm:inline">Create Goal</span>
             <PlusIcon />
           </Link>
@@ -456,25 +556,21 @@ export default function MyGoals() {
         {/* Tabs */}
         <div className="mb-6">
           <div className="inline-flex rounded-full bg-gray-100 p-1 shadow-sm">
-            <button
-              onClick={() => setActiveTab("active")}
-              className={`px-4 py-2 rounded-full text-sm ${activeTab === "active" ? 'bg-white shadow text-gray-900' : 'text-gray-600'}`}>
-              Active ({goals.filter(g=>g.status==='active').length})
-            </button>
-            <button
-              onClick={() => setActiveTab("completed")}
-              className={`px-4 py-2 rounded-full text-sm ${activeTab === "completed" ? 'bg-white shadow text-gray-900' : 'text-gray-600'}`}>
-              Completed ({goals.filter(g=>g.status==='completed').length})
-            </button>
-            <button
-              onClick={() => setActiveTab("all")}
-              className={`px-4 py-2 rounded-full text-sm ${activeTab === "all" ? 'bg-white shadow text-gray-900' : 'text-gray-600'}`}>
-              All ({goals.length})
-            </button>
+            <button onClick={() => setActiveTab("active")} className={`px-4 py-2 rounded-full text-sm ${activeTab === "active" ? 'bg-white shadow text-gray-900' : 'text-gray-600'}`}>Active ({goals.filter(g=>g.status==='active').length})</button>
+            <button onClick={() => setActiveTab("completed")} className={`px-4 py-2 rounded-full text-sm ${activeTab === "completed" ? 'bg-white shadow text-gray-900' : 'text-gray-600'}`}>Completed ({goals.filter(g=>g.status==='completed').length})</button>
+            <button onClick={() => setActiveTab("all")} className={`px-4 py-2 rounded-full text-sm ${activeTab === "all" ? 'bg-white shadow text-gray-900' : 'text-gray-600'}`}>All ({goals.length})</button>
           </div>
         </div>
 
-        {/* Grid of cards */}
+        {loading && (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto" />
+            <div className="mt-3 text-sm text-gray-500">Loading your goals…</div>
+          </div>
+        )}
+
+        {error && <div className="text-red-500 mb-4">{error}</div>}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {visibleGoals.map((g) => (
             <div key={g.id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
@@ -500,7 +596,6 @@ export default function MyGoals() {
                 </div>
               </div>
 
-              {/* Stats box */}
               <div className="mt-4 bg-gray-50 border border-gray-100 rounded-lg p-4 flex items-center gap-4 text-sm text-gray-700">
                 <div className="flex-1">
                   <div className="text-orange-600 font-bold flex items-center"><IconStreak />{g.streak}</div>
@@ -518,50 +613,37 @@ export default function MyGoals() {
                 </div>
               </div>
 
-              {/* Progress */}
               <div className="mt-4">
                 <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
                   <div>Progress</div>
                   <div>{g.progress}%</div>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                  <div className="h-full" style={{ width: `${g.progress}%`, background: 'linear-gradient(90deg,#0b1220,#000)' }}></div>
+                  <div className="h-full" style={{ width: `${g.progress}%`, background: 'linear-gradient(90deg,#0b1220,#000)' }} />
                 </div>
               </div>
 
-              {/* Actions */}
               <div className="mt-4 flex items-center gap-3">
-                <Link to={`/log-progress/${g.id}`}       className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md shadow hover:bg-white-100 transition-colors">+ Log Progress</Link>
+                <button onClick={() => logProgress(g.id)} className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md shadow hover:bg-white-100 transition-colors">+ Log Progress</button>
 
-                <Link
-  to={`/goal/${g.id}`}
-  state={{ goal: g }}
-  className="flex items-center gap-1 text-sm px-3 py-1 rounded-md bg-white text-black border border-gray-300 hover:bg-gray-100"
->
-  <HiOutlineEye className="w-4 h-4" />
-  View
-</Link>
+                <button onClick={() => viewGoal(g.id)} className="flex items-center gap-1 text-sm px-3 py-1 rounded-md bg-white text-black border border-gray-300 hover:bg-gray-100">
+                  <HiOutlineEye className="w-4 h-4" />
+                  View
+                </button>
 
-<button
-  onClick={() => editGoal(g.id)}
-  className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-white"
->
-  <HiOutlinePencil className="w-4 h-4" />
-</button>
+                <button onClick={() => editGoal(g.id)} className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-white">
+                  <HiOutlinePencil className="w-4 h-4" />
+                </button>
 
-<button
-  onClick={() => handleDelete(g.id)}
-  className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-100"
->
-  <HiOutlineTrash className="w-4 h-4 text-black font-bold" />
-</button>
+                <button onClick={() => handleDelete(g.id)} className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-100">
+                  <HiOutlineTrash className="w-4 h-4 text-black font-bold" />
+                </button>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Edit modal */}
       <EditGoalModal
         open={isModalOpen}
         onClose={() => { setModalOpen(false); setEditingGoal(null); }}
