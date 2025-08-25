@@ -2,6 +2,8 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import React from "react";   
 import api from "../api";   
+import { ToastContainer, toast } from 'react-toastify';
+
 
 export default function CreateGoalPage() {
   const navigate = useNavigate();
@@ -21,6 +23,8 @@ export default function CreateGoalPage() {
   const [endDate, setEndDate] = useState("");
   const [frequency, setFrequency] = useState("Daily");
   const [isPublic, setIsPublic] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
 
   function handleBack() {
     // navigate back if there is history, otherwise go to /my-goals
@@ -52,14 +56,23 @@ async function handleSubmit(e) {
     const res = await api.post("/goals", payload, {
     });
 
-    console.log("Goal created:", res.data);
-    alert(`Created goal: ${res.data.title}`);
-    navigate("/my-goals");
-  } catch (err) {
-    console.error("Error creating goal:", err);
-    alert("Failed to create goal. Please try again.");
-  }
-}
+// Inside handleLogin success case:
+toast.success("Goal created successfully");
+setTimeout(() => {
+  navigate("/my-goals");
+}, 1000); // Short delay to allow toast to render
+    } catch (err) {
+      console.error(err);
+      let msg = "Goal creation failed. Please try again.";
+      if (err.response && err.response.data) {
+        msg = err.response.data.message || err.response.data.error || JSON.stringify(err.response.data);
+      }
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
 return (
     <div className="min-h-screen bg-white px-8 py-10">
@@ -250,6 +263,8 @@ return (
           </div>
         </form>
       </div>
+            <ToastContainer position="top-right" />
+      
     </div>
   );
 }

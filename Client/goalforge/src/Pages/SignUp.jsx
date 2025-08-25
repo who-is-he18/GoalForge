@@ -1,8 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../api"; 
+import api from "../api";
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
-export default function Signup({ onSignup }) {
+export default function SignupStyled({ onSignup }) {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -14,11 +16,17 @@ export default function Signup({ onSignup }) {
   const [error, setError] = useState(null);
 
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
 
-  const handleImageUpload = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setProfileImage(e.target.files[0]);
+  const handleImageSelect = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      setProfileImage(Object.assign(file, { preview: URL.createObjectURL(file) }));
     }
+  };
+
+  const openFilePicker = () => {
+    fileInputRef.current?.click();
   };
 
   const handleSignup = async (e) => {
@@ -78,21 +86,19 @@ export default function Signup({ onSignup }) {
         }
       }
 
-      // navigate to a post-signup page — change as you wish
-      // I pick "/dashboard" as a reasonable default; change or remove if your app differs.
-      navigate("/home");
+// Inside handleLogin success case:
+toast.success("Account created successfully");
+setTimeout(() => {
+  navigate("/home");
+}, 1000); // Short delay to allow toast to render
     } catch (err) {
-      console.error("Signup failed:", err);
-      // axios error shape handling
+      console.error(err);
+      let msg = "Signup failed. Check your network and try again.";
       if (err.response && err.response.data) {
-        const msg =
-          err.response.data.message ||
-          err.response.data.error ||
-          JSON.stringify(err.response.data);
-        setError(msg);
-      } else {
-        setError("Failed to register. Please check your network and try again.");
+        msg = err.response.data.message || err.response.data.error || JSON.stringify(err.response.data);
       }
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -101,146 +107,160 @@ export default function Signup({ onSignup }) {
   const onSwitchToLogin = () => {
     navigate("/");
   };
+  const switchToLogin = () => navigate("/");
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white">
-      <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-lg">
-        <h1 className="text-3xl font-bold text-center text-black">GoalForge</h1>
-        <h2 className="text-xl mt-2 text-center text-gray-800">
-          Create your account
-        </h2>
-        <p className="text-center text-gray-600 mt-1">
-          Join GoalForge to start tracking and achieving your goals
-        </p>
-
-        <form onSubmit={handleSignup} className="mt-6 space-y-4">
-          {/* Profile Picture */}
-          <div>
-            <label className="block text-gray-700 font-medium mb-1">
-              Profile Picture (Optional)
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="w-full text-gray-700"
-            />
-            {profileImage && (
-              <p className="text-sm text-gray-600 mt-1">
-                Selected: {profileImage.name}
-              </p>
-            )}
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-white p-6">
+      <div className="w-full max-w-[420px] bg-white rounded-2xl border border-gray-200 shadow-md p-8">
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white border border-gray-200 mb-3">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="9" stroke="#0f172a" strokeWidth="1.2" />
+              <circle cx="12" cy="12" r="5" stroke="#0f172a" strokeWidth="1.2" />
+              <circle cx="12" cy="12" r="2" fill="#0f172a" />
+            </svg>
           </div>
 
-          {/* Username */}
+          <h1 className="text-lg font-semibold text-gray-800">GoalForge</h1>
+          <h2 className="text-sm text-gray-500 mt-2">Create your account</h2>
+          <p className="text-center text-xs text-gray-400 mt-2 px-6">Join GoalForge to start tracking and achieving your goals</p>
+        </div>
+
+        <form onSubmit={handleSignup} className="mt-6 space-y-4">
+          <div className="text-sm">
+            <label className="block font-medium text-gray-700">Profile Picture (Optional)</label>
+            <div className="flex flex-col items-center mt-3">
+              <div className="w-20 h-20 rounded-full border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden bg-white">
+                {profileImage ? (
+                  <img src={profileImage.preview} alt="preview" className="w-full h-full object-cover" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                )}
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageSelect}
+              />
+
+              <button type="button" onClick={openFilePicker} className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm bg-white hover:bg-gray-50">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16v4h10v-4M12 12v8M16 8l-4-4-4 4" />
+                </svg>
+                Choose Image
+              </button>
+              {profileImage && <p className="text-xs text-gray-500 mt-2">{profileImage.name}</p>}
+            </div>
+          </div>
+
           <div>
-            <label className="block text-gray-700 font-medium mb-1">
-              Username
-            </label>
+            <label className="block text-xs font-medium text-gray-600 mb-2">Username</label>
             <input
               type="text"
               placeholder="Choose a username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              className="w-full text-sm px-4 py-2 rounded-lg bg-gray-100 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-0"
             />
           </div>
 
-          {/* Email */}
           <div>
-            <label className="block text-gray-700 font-medium mb-1">
-              Email
-            </label>
+            <label className="block text-xs font-medium text-gray-600 mb-2">Email</label>
             <input
               type="email"
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              className="w-full text-sm px-4 py-2 rounded-lg bg-gray-100 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-0"
             />
           </div>
 
-          {/* Password */}
           <div>
-            <label className="block text-gray-700 font-medium mb-1">
-              Password
-            </label>
-            <div className="flex items-center">
+            <label className="block text-xs font-medium text-gray-600 mb-2">Password</label>
+            <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
                 placeholder="Create a password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-4 py-2 border border-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+                className="w-full text-sm px-4 py-2 rounded-lg bg-gray-100 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-0"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="ml-2 text-sm text-black hover:underline"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600"
+                aria-label="toggle password"
               >
-                {showPassword ? "Hide" : "Show"}
+                {showPassword ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-4.477-10-10a9.97 9.97 0 012.112-5.936M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    <circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>
 
-          {/* Confirm Password */}
           <div>
-            <label className="block text-gray-700 font-medium mb-1">
-              Confirm Password
-            </label>
-            <div className="flex items-center">
+            <label className="block text-xs font-medium text-gray-600 mb-2">Confirm Password</label>
+            <div className="relative">
               <input
                 type={showConfirmPassword ? "text" : "password"}
                 placeholder="Confirm your password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                className="w-full px-4 py-2 border border-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+                className="w-full text-sm px-4 py-2 rounded-lg bg-gray-100 placeholder-gray-400 border border-transparent focus:outline-none focus:ring-0"
               />
               <button
                 type="button"
-                onClick={() =>
-                  setShowConfirmPassword(!showConfirmPassword)
-                }
-                className="ml-2 text-sm text-black hover:underline"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600"
+                aria-label="toggle confirm password"
               >
-                {showConfirmPassword ? "Hide" : "Show"}
+                {showConfirmPassword ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-5.523 0-10-4.477-10-10a9.97 9.97 0 012.112-5.936M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    <circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>
 
-          {/* Error */}
-          {error && (
-            <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
-              {error}
-            </div>
-          )}
+          {error && <div className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</div>}
 
-          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-black text-white py-2 rounded-lg hover:bg-gray-900 transition duration-200 disabled:opacity-60"
+            className="w-full py-2 rounded-full bg-black text-white text-sm font-medium shadow-sm hover:opacity-95 transition disabled:opacity-60"
           >
             {loading ? "Creating account..." : "Create account"}
           </button>
         </form>
 
-        {/* Switch to Login */}
-        <p className="text-center text-gray-600 mt-4">
-          Already have an account?{" "}
-          <button
-            type="button"
-            onClick={onSwitchToLogin}
-            className="text-black font-medium hover:underline"
-          >
-            Sign in
-          </button>
+        <p className="text-center text-gray-600 mt-4 text-sm">
+          Already have an account?{' '}
+          <button onClick={switchToLogin} className="text-black font-medium hover:underline" type="button">Sign in</button>
         </p>
       </div>
+      <ToastContainer position="top-right" />
     </div>
   );
 }

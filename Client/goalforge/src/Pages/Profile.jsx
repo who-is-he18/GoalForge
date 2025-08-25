@@ -3,6 +3,8 @@ import { FaArrowLeft, FaFire, FaBullseye, FaCheckSquare, FaRegGrinStars } from "
 import { IoMdCalendar } from "react-icons/io";
 import profilePic from "../assets/profile-placeholder.png"; // fallback image
 import api from "../api";
+import { ToastContainer, toast } from 'react-toastify';
+
 
 // Local UI fallback badges (keeps your existing UI when backend badges are missing)
 const fallbackBadges = [
@@ -237,12 +239,21 @@ export default function Profile() {
       }
 
       setIsEditing(false);
+      // Inside handleLogin success case:
+      toast.success("Profile Updated Successfully");
+      setTimeout(() => {
+        navigate("/my-goals");
+      }, 1000); // Short delay to allow toast to render
     } catch (err) {
       console.error(err);
-      const msg = err?.response?.data?.message || err.message || String(err);
+      let msg = "Profile update failed. Please try again.";
+      if (err.response && err.response.data) {
+        msg = err.response.data.message || err.response.data.error || JSON.stringify(err.response.data);
+      }
       setError(msg);
+      toast.error(msg);
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   };
 
@@ -445,6 +456,8 @@ export default function Profile() {
           </div>
         </div>
       </div>
+                  <ToastContainer position="top-right" />
+      
     </div>
   );
 }

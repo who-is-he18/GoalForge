@@ -3,6 +3,9 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { HiOutlineEye, HiOutlinePencil, HiOutlineTrash } from "react-icons/hi";
 import api from "../api";
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 
 /* ---------- Icons ---------- */
 const PlusIcon = () => (
@@ -478,18 +481,99 @@ async function togglePublic(id) {
     setModalOpen(true);
   }
 
-  async function handleDelete(id) {
-    if (!confirm("Delete this goal?")) return;
-    const prev = goals;
-    setGoals((p) => p.filter((g) => g.id !== id));
-    try {
-      await api.delete(`/goals/${id}`);
-    } catch (err) {
-      console.error("Delete failed", err);
-      setGoals(prev);
-      alert("Failed to delete goal.");
+
+// make sure at top of file:
+// import { toast } from 'react-toastify';
+// import 'react-toastify/dist/ReactToastify.css';
+
+async function handleDelete(goalId) {
+  // keep a copy so we can restore on failure
+  const prevGoals = goals;
+
+  // show a non-auto-closing toast with confirmation UI
+  const confirmToastId = toast(
+    ({ closeToast }) => {
+      // Handler invoked when user confirms deletion
+      const onConfirm = async () => {
+        // optimistic UI: remove immediately
+        setGoals((p) => p.filter((g) => g.id !== goalId));
+        setLoading(true);
+
+        // close the confirmation toast
+        closeToast();
+
+        try {
+          await api.delete(`/goals/${goalId}`);
+
+          // success toast (styled to match your app)
+          toast.success("Goal deleted successfully", {
+            position: 'top-right',
+            autoClose: 2000,
+            className: 'rounded-full border border-black shadow-md',
+            bodyClassName: 'text-sm font-medium text-white bg-transparent px-4 py-2',
+            progressClassName: 'bg-white',
+          });
+
+          // small delay so user sees toast, then navigate/show updated view
+          setTimeout(() => navigate("/my-goals"), 800);
+        } catch (err) {
+          console.error(err);
+          // restore previous data on error
+          setGoals(prevGoals);
+
+          let msg = "Goal deletion failed. Please try again.";
+          if (err.response && err.response.data) {
+            msg = err.response.data.message || err.response.data.error || JSON.stringify(err.response.data);
+          }
+          setError(msg);
+
+          toast.error(msg, {
+            position: 'top-right',
+            autoClose: 3000,
+            className: 'rounded-lg border border-red-100 shadow-sm bg-red-50',
+            bodyClassName: 'text-sm text-red-600 px-3 py-2',
+            progressClassName: 'bg-red-600',
+          });
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      // Render confirmation UI (Tailwind classes used in your app)
+      return (
+        <div className="max-w-xs">
+          <div className="text-sm font-medium text-gray-800">Delete this goal?</div>
+          <div className="text-xs text-gray-500 mt-1">This action cannot be undone.</div>
+
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={onConfirm}
+              className="inline-flex items-center justify-center px-3 py-1.5 rounded-full bg-black text-white text-sm font-medium shadow-sm hover:opacity-95"
+            >
+              Delete
+            </button>
+
+            <button
+              onClick={() => closeToast()}
+              className="inline-flex items-center justify-center px-3 py-1.5 rounded-md text-sm text-gray-600 border border-transparent hover:underline"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      );
+    },
+    {
+      // keep this confirm toast open until user interacts
+      autoClose: false,
+      closeOnClick: false,
+      closeButton: false,
+      draggable: false,
+      position: 'top-right',
     }
-  }
+  );
+}
+
 
 async function handleSave(updatedGoal) {
   setIsSaving(true);
@@ -523,13 +607,23 @@ async function handleSave(updatedGoal) {
 
     setModalOpen(false);
     setEditingGoal(null);
-  } catch (err) {
-    console.error("Save failed", err);
-    alert("Failed to save changes.");
-  } finally {
-    setIsSaving(false);
-  }
-}
+// Inside handleLogin success case:
+toast.success("Goal updated successfully");
+setTimeout(() => {
+  navigate("/my-goals");
+}, 1000); // Short delay to allow toast to render
+    } catch (err) {
+      console.error(err);
+      let msg = "Goal update failed. Please try again.";
+      if (err.response && err.response.data) {
+        msg = err.response.data.message || err.response.data.error || JSON.stringify(err.response.data);
+      }
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
   return (
@@ -643,7 +737,7 @@ async function handleSave(updatedGoal) {
           ))}
         </div>
       </div>
-
+            <ToastContainer position="top-right" />
       <EditGoalModal
         open={isModalOpen}
         onClose={() => { setModalOpen(false); setEditingGoal(null); }}
