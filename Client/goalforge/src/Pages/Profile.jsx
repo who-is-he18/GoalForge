@@ -1,28 +1,34 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { FaArrowLeft, FaFire, FaBullseye, FaCheckSquare, FaRegGrinStars } from "react-icons/fa";
 import { IoMdCalendar } from "react-icons/io";
-import profilePic from "../assets/profile-placeholder.png"; // Use a placeholder image
+import profilePic from "../assets/profile-placeholder.png"; // fallback image
+import api from "../api";
 
-const badges = [
+// Local UI fallback badges (keeps your existing UI when backend badges are missing)
+const fallbackBadges = [
   {
+    id: 1,
     icon: <FaFire color="#FF6B00" size={28} />,
     title: "7-Day Streak",
     desc: "Maintained a 7-day streak",
     date: "Jan 10, 2025",
   },
   {
+    id: 2,
     icon: <FaBullseye color="#FF2E63" size={28} />,
     title: "First Goal",
     desc: "Created your first goal",
     date: "Jun 15, 2024",
   },
   {
+    id: 3,
     icon: <FaRegGrinStars color="#FFB800" size={28} />,
     title: "Social Butterfly",
     desc: "Followed 10 goals",
     date: "Dec 1, 2024",
   },
   {
+    id: 4,
     icon: <FaCheckSquare color="#4CAF50" size={28} />,
     title: "Completionist",
     desc: "Completed your first goal",
@@ -30,71 +36,219 @@ const badges = [
   },
 ];
 
-// Helper to extract level number from string like "Level 12 Achiever"
 function extractLevel(levelStr) {
-  const match = levelStr.match(/Level\s*(\d+)/i);
+  const match = String(levelStr).match(/(\d+)/);
   return match ? parseInt(match[1], 10) : 1;
 }
 
 export default function Profile() {
+  // UI state
   const [tab, setTab] = useState("badges");
   const [isEditing, setIsEditing] = useState(false);
-  const [username, setUsername] = useState("@john_achiever");
-  const [level, setLevel] = useState("Level 12 Achiever");
-  const [xp, setXp] = useState(2450);
-  const [profileImage, setProfileImage] = useState(profilePic);
 
-  // For editing
-  const [tempUsername, setTempUsername] = useState(username);
-  const [tempLevel, setTempLevel] = useState(level);
-  const [tempProfileImage, setTempProfileImage] = useState(profileImage);
+  // Profile state
+  const [username, setUsername] = useState("@user");
+  const [displayName, setDisplayName] = useState("");
+  const [level, setLevel] = useState("Level 1");
+  const [xp, setXp] = useState(0);
+  const [profileImage, setProfileImage] = useState(profilePic);
+  const [stats, setStats] = useState({
+    total_goals: 0,
+    completed_goals: 0,
+    current_streak: 0,
+    following_count: 0,
+  });
+
+  // Badges
+  const [badges, setBadges] = useState([]);
+
+  // Editing temp state
+  const [tempUsername, setTempUsername] = useState("");
+  const [tempDisplayName, setTempDisplayName] = useState("");
+  const [tempProfileImage, setTempProfileImage] = useState(null);
 
   const fileInputRef = useRef(null);
 
-  // Simulate XP needed for next level (for demo, 150 XP per level)
-  const currentLevel = extractLevel(isEditing ? tempLevel : level);
-  const nextLevel = currentLevel + 1;
-  const xpForCurrentLevel = (currentLevel - 1) * 200 + 50; // Example formula
-  const xpForNextLevel = currentLevel * 200 + 50;
-  const progress =
-    xpForNextLevel > xpForCurrentLevel
-      ? Math.min(100, ((xp - xpForCurrentLevel) / (xpForNextLevel - xpForCurrentLevel)) * 100)
-      : 0;
+  // Loading / errors
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  // ----------------------
+  // Fetch profile + badges on mount (uses axios `api` instance)
+  // ----------------------
+  useEffect(() => {
+    let isMounted = true;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data: me } = await api.get('/me');
+
+        if (!isMounted) return;
+
+        // Map returned fields with safe fallbacks
+        setUsername(me.username ? (me.username.startsWith('@') ? me.username : `@${me.username}`) : '@user');
+        setDisplayName(me.display_name || me.displayName || '');
+
+        const lvlNum = me.level != null ? me.level : 1;
+        setLevel(`Level ${lvlNum}${me.level_title ? ` ${me.level_title}` : ''}`);
+
+        setXp(me.xp != null ? me.xp : 0);
+        setProfileImage(me.profile_pic ? me.profile_pic : profilePic);
+        if (me.stats) setStats(me.stats);
+
+        // Try badges: prefer user-specific endpoint first
+        const tryFetchBadges = async () => {
+          const userId = me.id;
+
+          // 1) try GET /user-badges?user_id=
+          try {
+            const { data: list1 } = await api.get(`/user-badges`, { params: { user_id: userId } });
+            if (Array.isArray(list1) && list1.length) return list1;
+          } catch (e) {
+            // ignore and try next
+          }
+
+          // 2) try GET /user-badges/:id
+          try {
+            const { data: single } = await api.get(`/user-badges/${userId}`);
+            if (single) return Array.isArray(single) ? single : [single];
+          } catch (e) {
+            // ignore
+          }
+
+          // 3) fallback to GET /user-badges and filter
+          try {
+            const { data: all } = await api.get('/user-badges');
+            if (Array.isArray(all)) return all.filter((ub) => ub.user_id === me.id);
+          } catch (e) {
+            // ignore
+          }
+
+          return [];
+        };
+
+        const ub = await tryFetchBadges();
+        if (!isMounted) return;
+
+        const mapped = ub.map((ubItem, idx) => {
+          const awardedAt = ubItem.awarded_at || ubItem.created_at || null;
+          if (ubItem.badge) {
+            return {
+              id: ubItem.id,
+              title: ubItem.badge.name,
+              desc: ubItem.badge.description,
+              date: awardedAt ? new Date(awardedAt).toLocaleDateString() : '',
+              icon_url: ubItem.badge.icon_url || null,
+            };
+          }
+
+          const fb = fallbackBadges.find((f) => f.id === ubItem.badge_id) || fallbackBadges[ubItem.badge_id - 1];
+          return {
+            id: ubItem.id,
+            title: fb ? fb.title : `Badge #${ubItem.badge_id}`,
+            desc: fb ? fb.desc : '',
+            date: awardedAt ? new Date(awardedAt).toLocaleDateString() : '',
+            icon_url: null,
+          };
+        });
+
+        setBadges(mapped.length ? mapped : fallbackBadges.map((b) => ({ id: b.id, title: b.title, desc: b.desc, date: b.date, icon_url: null })));
+      } catch (err) {
+        console.error(err);
+        const msg = err?.response?.data?.message || err.message || String(err);
+        if (isMounted) setError(msg);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    load();
+    return () => { isMounted = false; };
+  }, []);
+
+  // ----------------------
+  // XP progress calculations
+  // ----------------------
+  const currentLevelNum = extractLevel(level);
+  const nextLevel = currentLevelNum + 1;
+  const xpForCurrentLevel = (currentLevelNum - 1) * 200 + 50;
+  const xpForNextLevel = currentLevelNum * 200 + 50;
+  const progress = xpForNextLevel > xpForCurrentLevel ? Math.min(100, ((xp - xpForCurrentLevel) / (xpForNextLevel - xpForCurrentLevel)) * 100) : 0;
   const xpToNext = Math.max(0, xpForNextLevel - xp);
 
+  // ----------------------
+  // Edit / Save handlers
+  // ----------------------
   const handleEdit = () => {
-    setTempUsername(username);
-    setTempLevel(level);
+    setTempUsername(username.replace(/^@/, ''));
+    setTempDisplayName(displayName);
     setTempProfileImage(profileImage);
     setIsEditing(true);
+    setError(null);
   };
 
   const handleCancel = () => {
     setIsEditing(false);
-  };
-
-  const handleSave = () => {
-    setUsername(tempUsername);
-    setLevel(tempLevel);
-    setProfileImage(tempProfileImage);
-    setIsEditing(false);
+    setTempProfileImage(null);
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files && e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (ev) => {
-        setTempProfileImage(ev.target.result);
+        setTempProfileImage(ev.target.result); // data URL for preview and (temporarily) for sending
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleImageEditClick = () => {
-    if (fileInputRef.current) fileInputRef.current.click();
+  const handleImageEditClick = () => { if (fileInputRef.current) fileInputRef.current.click(); };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const payload = {};
+      if (tempUsername) payload.username = tempUsername.replace(/^@/, '');
+      if (tempDisplayName) payload.display_name = tempDisplayName;
+
+      // If we have a data URL image, send it as `profile_pic` (your backend currently expects a string)
+      if (tempProfileImage && tempProfileImage.startsWith('data:')) {
+        payload.profile_pic = tempProfileImage;
+      } else if (tempProfileImage && tempProfileImage !== profilePic) {
+        payload.profile_pic = tempProfileImage; // could be an existing URL
+      }
+
+      const res = await api.put('/users/me', payload);
+      // backend returns { message, user }
+      if (res && res.data && res.data.user) {
+        const u = res.data.user;
+        setUsername(u.username ? (u.username.startsWith('@') ? u.username : `@${u.username}`) : username);
+        setProfileImage(u.profile_pic ? u.profile_pic : profilePic);
+        setXp(u.xp != null ? u.xp : xp);
+        setLevel(u.level != null ? `Level ${u.level}` : level);
+      } else {
+        // optimistic fallback
+        setUsername(tempUsername ? (tempUsername.startsWith('@') ? tempUsername : `@${tempUsername}`) : username);
+        setProfileImage(tempProfileImage || profileImage);
+      }
+
+      setIsEditing(false);
+    } catch (err) {
+      console.error(err);
+      const msg = err?.response?.data?.message || err.message || String(err);
+      setError(msg);
+    } finally {
+      setSaving(false);
+    }
   };
 
+  // ----------------------
+  // Render
+  // ----------------------
   return (
     <div className="bg-white min-h-screen">
       <div className="max-w-6xl mx-auto py-8">
@@ -126,7 +280,7 @@ export default function Profile() {
             <div className="bg-gray-50 rounded-2xl p-8 flex flex-col items-center shadow-sm relative">
               <div className="relative mb-4">
                 <img
-                  src={isEditing ? tempProfileImage : profileImage}
+                  src={isEditing && tempProfileImage ? tempProfileImage : profileImage}
                   alt="Profile"
                   className="w-[90px] h-[90px] rounded-full object-cover border-4 border-gray-200"
                 />
@@ -152,24 +306,26 @@ export default function Profile() {
                   </>
                 )}
               </div>
+
               {isEditing ? (
                 <>
                   <input
                     className="font-semibold text-xl mb-1 text-center border border-gray-300 rounded-lg px-2 py-1 w-full focus:outline-none focus:ring-2 focus:ring-blue-200"
                     value={tempUsername}
-                    onChange={e => setTempUsername(e.target.value)}
+                    onChange={(e) => setTempUsername(e.target.value)}
                   />
                   <input
                     className="text-gray-500 text-base text-center border border-gray-300 rounded-lg px-2 py-1 w-full mt-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                    value={tempLevel}
-                    onChange={e => setTempLevel(e.target.value)}
+                    value={tempDisplayName}
+                    onChange={(e) => setTempDisplayName(e.target.value)}
                   />
                   <div className="flex gap-2 mt-4">
                     <button
                       className="bg-blue-600 text-white px-4 py-1.5 rounded-lg font-medium hover:bg-blue-700 transition"
                       onClick={handleSave}
+                      disabled={saving}
                     >
-                      Save
+                      {saving ? "Saving..." : "Save"}
                     </button>
                     <button
                       className="bg-gray-200 text-gray-700 px-4 py-1.5 rounded-lg font-medium hover:bg-gray-300 transition"
@@ -190,24 +346,21 @@ export default function Profile() {
             {/* XP Card */}
             <div className="bg-gray-50 rounded-2xl p-6 shadow-sm">
               <div className="font-medium text-base mb-3 flex items-center">
-                <span role="img" aria-label="XP" className="mr-2">
-                  📈
-                </span>
+                <span role="img" aria-label="XP" className="mr-2">📈</span>
                 Experience Points
               </div>
               <div className="font-bold text-4xl mb-1">{xp}</div>
               <div className="text-gray-500 text-sm mb-4">Total XP</div>
+
               <div className="flex items-center gap-2 mb-1">
-                <span className="font-medium text-sm">Level {currentLevel}</span>
+                <span className="font-medium text-sm">Level {currentLevelNum}</span>
                 <div className="flex-1 h-2 bg-gray-200 rounded-lg mx-2 relative overflow-hidden">
                   <div
                     className="absolute left-0 top-0 h-2 bg-black rounded-lg transition-all"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <span className="font-medium text-sm text-gray-400">
-                  Level {nextLevel}
-                </span>
+                <span className="font-medium text-sm text-gray-400">Level {nextLevel}</span>
               </div>
               <div className="text-gray-400 text-xs">{xpToNext} XP to next level</div>
             </div>
@@ -217,19 +370,19 @@ export default function Profile() {
               <div className="font-medium text-base mb-4">Stats</div>
               <div className="flex flex-wrap gap-6">
                 <div>
-                  <div className="font-bold text-xl text-gray-900">8</div>
+                  <div className="font-bold text-xl text-gray-900">{stats.total_goals}</div>
                   <div className="text-gray-500 text-sm">Total Goals</div>
                 </div>
                 <div>
-                  <div className="font-bold text-xl text-green-700">3</div>
+                  <div className="font-bold text-xl text-green-700">{stats.completed_goals}</div>
                   <div className="text-gray-500 text-sm">Completed</div>
                 </div>
                 <div>
-                  <div className="font-bold text-xl text-orange-500">15</div>
+                  <div className="font-bold text-xl text-orange-500">{stats.current_streak}</div>
                   <div className="text-gray-500 text-sm">Current Streak</div>
                 </div>
                 <div>
-                  <div className="font-bold text-xl text-purple-700">23</div>
+                  <div className="font-bold text-xl text-purple-700">{stats.following_count}</div>
                   <div className="text-gray-500 text-sm">Following</div>
                 </div>
               </div>
@@ -243,22 +396,14 @@ export default function Profile() {
               <button
                 onClick={() => setTab("badges")}
                 className={`px-5 py-1.5 rounded-xl font-medium text-sm cursor-pointer outline-none border transition 
-                  ${
-                    tab === "badges"
-                      ? "bg-white border-[1.5px] border-gray-900 shadow-sm"
-                      : "bg-gray-100 border-[1.5px] border-gray-200"
-                  }`}
+                  ${tab === "badges" ? "bg-white border-[1.5px] border-gray-900 shadow-sm" : "bg-gray-100 border-[1.5px] border-gray-200"}`}
               >
-                Badges (4)
+                Badges ({badges.length})
               </button>
               <button
                 onClick={() => setTab("activity")}
                 className={`px-5 py-1.5 rounded-xl font-medium text-sm cursor-pointer outline-none border transition 
-                  ${
-                    tab === "activity"
-                      ? "bg-white border-[1.5px] border-gray-900 shadow-sm"
-                      : "bg-gray-100 border-[1.5px] border-gray-200"
-                  }`}
+                  ${tab === "activity" ? "bg-white border-[1.5px] border-gray-900 shadow-sm" : "bg-gray-100 border-[1.5px] border-gray-200"}`}
               >
                 Recent Activity
               </button>
@@ -272,7 +417,14 @@ export default function Profile() {
                     key={idx}
                     className="bg-white rounded-2xl p-6 min-w-[260px] flex-1 shadow-md flex flex-col gap-2"
                   >
-                    <div>{badge.icon}</div>
+                    <div>
+                      {badge.icon_url ? (
+                        <img src={badge.icon_url} alt={badge.title} className="w-7 h-7" />
+                      ) : (
+                        // fallback to local icon set (by matching title)
+                        fallbackBadges[idx % fallbackBadges.length].icon
+                      )}
+                    </div>
                     <div className="font-semibold text-lg">{badge.title}</div>
                     <div className="text-gray-600 text-base">{badge.desc}</div>
                     <div className="flex items-center text-gray-400 text-sm mt-1">
@@ -287,6 +439,9 @@ export default function Profile() {
                 No recent activity yet.
               </div>
             )}
+
+            {loading && <div className="text-sm text-gray-500">Loading...</div>}
+            {error && <div className="text-sm text-red-500">{error}</div>}
           </div>
         </div>
       </div>

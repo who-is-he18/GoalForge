@@ -2,7 +2,7 @@
 
 from flask_restful import Resource, reqparse
 from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
-from flask import request
+from flask import request, current_app
 from app.models import (
     User, Goal, GoalProgress, Comment, Cheer,
     Badge, UserBadge, Follower, Notification
@@ -202,10 +202,44 @@ class GoalResource(Resource):
 
     @jwt_required()
     def delete(self, goal_id):
+        # load goal and current user
+        current_user = User.query.get(get_jwt_identity())
         goal = Goal.query.get_or_404(goal_id)
-        db.session.delete(goal)
-        db.session.commit()
-        return {"message": "Goal deleted"}, 200
+
+        # Authorization: owner or admin (level 99)
+        if not current_user or (goal.user_id != current_user.id and current_user.level != 99):
+            return {"message": "Not authorized to delete this goal."}, 403
+
+        try:
+            # Bulk-delete pattern: delete children first to avoid FK/NULL updates
+
+            # 1) fetch goal progress ids (use a query to avoid loading full objects)
+            progress_id_rows = db.session.query(GoalProgress.id).filter(GoalProgress.goal_id == goal.id).all()
+            progress_ids = [pid for (pid,) in progress_id_rows]  # unpack tuples
+
+            if progress_ids:
+                # 2) delete cheers and comments that reference those progress rows
+                Cheer.query.filter(Cheer.goal_progress_id.in_(progress_ids)).delete(synchronize_session=False)
+                Comment.query.filter(Comment.goal_progress_id.in_(progress_ids)).delete(synchronize_session=False)
+
+                # 3) delete the goal progress rows themselves
+                GoalProgress.query.filter(GoalProgress.goal_id == goal.id).delete(synchronize_session=False)
+
+            # 4) delete followers of the goal (if you track followed_goal_id)
+            Follower.query.filter(Follower.followed_goal_id == goal.id).delete(synchronize_session=False)
+
+            # 5) any other related cleanup (notifications referencing the goal/progress) - add if needed
+
+            # 6) finally delete the goal
+            db.session.delete(goal)
+            db.session.commit()
+            return {"message": "Goal and related data deleted successfully."}, 200
+
+        except Exception as exc:
+            db.session.rollback()
+            current_app.logger.exception("Error deleting goal %s: %s", goal_id, exc)
+            return {"message": "Failed to delete goal."}, 500
+
     
 # ------------------- Goal Progress Resources -------------------
 

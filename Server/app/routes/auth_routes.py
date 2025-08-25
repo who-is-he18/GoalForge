@@ -6,6 +6,8 @@ from flask_jwt_extended import (
 from werkzeug.security import generate_password_hash
 from datetime import timedelta
 import re
+from sqlalchemy import func
+
 
 from app.models import (
     db, User, Goal, GoalProgress, Cheer, Comment, Follower, UserBadge, Notification, TokenBlocklist
@@ -252,9 +254,51 @@ class MeResource(Resource):
         if not user:
             return {"message": "User not found"}, 404
 
+        # Total XP earned from progress records for goals owned by this user
+        total_xp = (
+            db.session.query(func.coalesce(func.sum(GoalProgress.xp_earned), 0))
+            .join(Goal, GoalProgress.goal_id == Goal.id)
+            .filter(Goal.user_id == user.id)
+            .scalar()
+        ) or 0
+
+        # Level rule: every 500 xp => +1 level (start at level 1)
+        level_number = 1 + (total_xp // 500)
+
+        # Basic stats (best-effort; adjust if your schema differs)
+        total_goals = Goal.query.filter_by(user_id=user.id).count()
+        # If you track completed goals somewhere, replace the next line with correct filter.
+        # Here we default to 0 if no 'is_completed' field exists.
+        try:
+            completed_goals = Goal.query.filter_by(user_id=user.id, is_completed=True).count()
+        except Exception:
+            completed_goals = 0
+
+        # following_count: number of follower records where this user is the follower
+        try:
+            following_count = Follower.query.filter_by(follower_id=user.id).count()
+        except Exception:
+            following_count = 0
+
+        # current_streak: if you store on goal, you might compute the max streak or aggregate.
+        # We'll return 0 as fallback; you can compute it from goal.streak_count or user's aggregated data.
+        try:
+            current_streak = max((g.streak_count for g in Goal.query.filter_by(user_id=user.id).all()), default=0)
+        except Exception:
+            current_streak = 0
+
         return {
             "id": user.id,
             "username": user.username,
             "email": user.email,
-            "profile_pic": user.profile_pic  # optional
+            "profile_pic": user.profile_pic,
+            "xp": int(total_xp),
+            "level": int(level_number),
+            "stats": {
+                "total_goals": total_goals,
+                "completed_goals": completed_goals,
+                "current_streak": current_streak,
+                "following_count": following_count
+            },
+            "created_at": user.created_at.isoformat() if user.created_at else None
         }, 200
