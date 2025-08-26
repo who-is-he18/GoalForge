@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
+import { HiOutlineEye } from "react-icons/hi";
+
 
 // (Icons & small components kept the same as your original file)
 const UserIcon = () => (
@@ -59,7 +61,7 @@ const Avatar = ({ src, name }) => {
         />
       ) : (
         <img
-          src="https://i.pinimg.com/736x/c2/63/bc/c263bc7b94fed2341df4145c77ccb19b.jpg" 
+          src="https://static.vecteezy.com/system/resources/previews/036/594/092/non_2x/man-empty-avatar-photo-placeholder-for-social-networks-resumes-forums-and-dating-sites-male-and-female-no-photo-images-for-unfilled-user-profile-free-vector.jpg" 
           alt={name || "User"}
           className="w-full h-full object-cover"
         />
@@ -94,6 +96,10 @@ export default function GoalForgeHome() {
   const [openComments, setOpenComments] = useState(new Set());
   const [commentInputs, setCommentInputs] = useState({});
   const [currentUser, setCurrentUser] = useState(null);
+
+    function viewGoal(id) {
+    navigate(`/goal/${id}`, { state: { goal: goals.find(g => g.id === id) } });
+  }
 
 
   // ---------- Normalizers ----------
@@ -307,61 +313,94 @@ const filtered = useMemo(() => {
     }
   }
 
-  async function addComment(goal) {
-    const text = (commentInputs[goal.id] || "").trim();
-    if (!text) return;
+// Updated addComment
+async function addComment(goal) {
+  const text = (commentInputs[goal.id] || "").trim();
+  if (!text) return;
 
-    // optimistic UI
-    const tempId = `temp-${Date.now()}`;
-    const tempComment = {
-  id: tempId,
-  user_id: currentUser?.id ?? null,   // let the UI know who "You" is
-  author: currentUser?.username ? "You" : "You",
-  avatar: currentUser?.profile_pic || null,
-  content: text,
-  created_at: new Date().toISOString(),
-};
+  // optimistic UI - temp comment
+  const tempId = `temp-${Date.now()}`;
+  const tempComment = {
+    id: tempId,
+    user_id: currentUser?.id ?? null,
+    author: currentUser?.username ? "You" : "You",
+    avatar: currentUser?.profile_pic || null,
+    content: text,
+    created_at: new Date().toISOString(),
+  };
 
+  setCommentsByGoal((prev) => ({
+    ...prev,
+    [goal.id]: [...(prev[goal.id] || []), tempComment],
+  }));
+  setCommentInputs((prev) => ({ ...prev, [goal.id]: "" }));
+
+  try {
+    const payload = goal.progressId
+      ? { goal_progress_id: goal.progressId, content: text }
+      : { goal_id: goal.id, content: text };
+
+    const res = await api.post("/comments", payload);
+    const data = res.data || {};
+
+    // Server shape can be:
+    // 1) comment object (old)
+    // 2) { comment: <...>, created_goal_progress: <...> } (new)
+    // 3) comment object that contains goal_progress_id property
+    let serverCommentRaw = null;
+    let createdGp = null;
+
+    if (data.comment) {
+      serverCommentRaw = data.comment;
+      createdGp = data.created_goal_progress || null;
+    } else {
+      // maybe server returned the comment directly
+      serverCommentRaw = data;
+      createdGp = data.created_goal_progress || null;
+      // or the server might have returned top-level goal_progress_id along with the comment fields
+    }
+
+    const created = normalizeComment(serverCommentRaw || {});
+
+    // Replace temp comment with server version
     setCommentsByGoal((prev) => ({
       ...prev,
-      [goal.id]: [...(prev[goal.id] || []), tempComment],
+      [goal.id]: (prev[goal.id] || []).map((c) => (c.id === tempId ? created : c)),
     }));
-    setCommentInputs((prev) => ({ ...prev, [goal.id]: "" }));
 
-    try {
-      const payload = goal.progressId
-        ? { goal_progress_id: goal.progressId, content: text }
-        : { goal_id: goal.id, content: text };
+    // Update goals list: bump comment count and attach progressId if server created one
+    setGoals((prev) =>
+      prev.map((g) => {
+        if (g.id !== goal.id) return g;
+        const updated = { ...g, comments: (g.comments || 0) + 1 };
 
-      const res = await api.post("/comments", payload);
-      const created = normalizeComment(res.data || {});
+        // If server returned a created goal progress, use its id as progressId
+        if (!g.progressId) {
+          // look for createdGp or a goal_progress_id on the comment
+          const gpFromComment = created.goal_progress_id || created.goalProgressId || created.goalProgress?.id;
+          if (createdGp && createdGp.id) updated.progressId = createdGp.id;
+          else if (gpFromComment) updated.progressId = gpFromComment;
+        }
 
-      // Replace temp with server version
-      setCommentsByGoal((prev) => ({
-        ...prev,
-        [goal.id]: (prev[goal.id] || []).map((c) => (c.id === tempId ? created : c)),
-      }));
+        return updated;
+      })
+    );
 
-      // increment count + set progressId if created
-      setGoals((prev) =>
-        prev.map((g) => {
-          if (g.id !== goal.id) return g;
-          const updated = { ...g, comments: (g.comments || 0) + 1 };
-          if (!g.progressId && res.data?.goal_progress_id) {
-            updated.progressId = res.data.goal_progress_id;
-          }
-          return updated;
-        })
-      );
-    } catch (err) {
-      console.error("Failed to add comment", err);
-      // revert optimistic UI
-      setCommentsByGoal((prev) => ({
-        ...prev,
-        [goal.id]: (prev[goal.id] || []).filter((c) => c.id !== tempId),
-      }));
-    }
+    // If the server created a full GoalProgress returned in payload, optionally merge it into
+    // any progress state you keep elsewhere (e.g. in ViewGoal). If you have a fetchProgressLogs()
+    // available, you can call it here instead of trying to merge broadly.
+
+  } catch (err) {
+    console.error("Failed to add comment", err);
+    // revert optimistic UI
+    setCommentsByGoal((prev) => ({
+      ...prev,
+      [goal.id]: (prev[goal.id] || []).filter((c) => c.id !== tempId),
+    }));
+    // Optionally show a toast/error to user here
   }
+}
+
 
   function toggleComments(goal) {
     setOpenComments((prev) => {
@@ -400,49 +439,109 @@ const filtered = useMemo(() => {
     }
   }
 
-  async function toggleCheer(goal) {
-    const wasLiked = !!goal.my_cheer_id;
-    const originalCheers = goal.cheers || 0;
-    const originalMyCheerId = goal.my_cheer_id || null;
+// Updated toggleCheer
+async function toggleCheer(goal) {
+  const wasLiked = !!goal.my_cheer_id;
+  const originalCheers = goal.cheers || 0;
+  const originalMyCheerId = goal.my_cheer_id || null;
 
-    // optimistic UI
-    setGoals((prev) =>
-      prev.map((g) =>
-        g.id === goal.id
-          ? {
-              ...g,
-              liked: !wasLiked,
-              cheers: wasLiked ? Math.max(originalCheers - 1, 0) : originalCheers + 1,
-            }
-          : g
-      )
-    );
+  // optimistic UI: flip liked and adjust count
+  setGoals((prev) =>
+    prev.map((g) =>
+      g.id === goal.id
+        ? {
+            ...g,
+            liked: !wasLiked,
+            cheers: wasLiked ? Math.max(originalCheers - 1, 0) : originalCheers + 1,
+          }
+        : g
+    )
+  );
 
-    try {
-      if (wasLiked) {
-        await api.delete(`/cheers/${originalMyCheerId}`);
-        try {
-          await fetchGoalById(goal.id);
-        } catch (err) {
-          console.warn("fetchGoalById failed after DELETE; refetching all", err);
-          if (typeof fetchGoals === "function") await fetchGoals();
-        }
-      } else {
-        const payload = goal.progressId ? { goal_progress_id: goal.progressId } : { goal_id: goal.id };
-        await api.post("/cheers", payload);
-        try {
-          await fetchGoalById(goal.id);
-        } catch (err) {
-          console.warn("fetchGoalById failed after POST; refetching all", err);
-          if (typeof fetchGoals === "function") await fetchGoals();
-        }
-      }
-    } catch (err) {
-      console.error("toggleCheer failed", err);
+  try {
+    if (wasLiked) {
+      // optimistic delete
+      await api.delete(`/cheers/${originalMyCheerId}`);
+
+      // try to refresh the specific goal, fall back to refetch all
       try {
+        if (typeof fetchGoalById === "function") {
+          await fetchGoalById(goal.id);
+        } else if (typeof fetchGoals === "function") {
+          await fetchGoals();
+        }
+      } catch (err) {
+        console.warn("fetchGoalById failed after DELETE; falling back", err);
+        // best-effort local revert if fetch fails
+        setGoals((prev) =>
+          prev.map((g) =>
+            g.id === goal.id ? { ...g, liked: false, cheers: Math.max(originalCheers - 1, 0), my_cheer_id: null } : g
+          )
+        );
+      }
+    } else {
+      // create cheer
+      const payload = goal.progressId ? { goal_progress_id: goal.progressId } : { goal_id: goal.id };
+
+      const res = await api.post("/cheers", payload);
+      const data = res.data || {};
+
+      // Server shapes:
+      // 1) cheer object (old) { id: 123, ... } maybe plus goal_progress_id/cheer_count
+      // 2) { cheer: {...}, created_goal_progress: {...} } (new)
+      let createdCheer = null;
+      let createdGp = null;
+      if (data.cheer) {
+        createdCheer = data.cheer;
+        createdGp = data.created_goal_progress || null;
+      } else {
+        createdCheer = data;
+        createdGp = data.created_goal_progress || null;
+      }
+
+      // extract useful bits
+      const cheerId = createdCheer?.id || createdCheer?.cheer_id || null;
+      const cheerCount = createdCheer?.cheer_count ?? data?.cheer_count ?? null;
+      const gpFromResponse = createdCheer?.goal_progress_id || data?.goal_progress_id || (createdGp && createdGp.id);
+
+      // Update the goals list with returned info (prefer server truth)
+      setGoals((prev) =>
+        prev.map((g) => {
+          if (g.id !== goal.id) return g;
+          const updated = { ...g, liked: true };
+          if (cheerCount !== null) updated.cheers = cheerCount;
+          else updated.cheers = (g.cheers || 0) + 1;
+
+          // set my_cheer_id if server returned it
+          if (cheerId) updated.my_cheer_id = cheerId;
+
+          // if server created a goal progress, attach it
+          if (!g.progressId && gpFromResponse) updated.progressId = gpFromResponse;
+
+          return updated;
+        })
+      );
+
+      // If we can't trust the local merge, try to re-fetch the goal
+      try {
+        if (typeof fetchGoalById === "function") {
+          await fetchGoalById(goal.id);
+        }
+      } catch (err) {
+        console.warn("fetchGoalById failed after POST; attempting fetchGoals()", err);
+        if (typeof fetchGoals === "function") await fetchGoals();
+      }
+    }
+  } catch (err) {
+    console.error("toggleCheer failed", err);
+    // On failure, attempt to re-fetch the goal, otherwise revert optimistic UI
+    try {
+      if (typeof fetchGoalById === "function") {
         await fetchGoalById(goal.id);
-      } catch (fetchErr) {
-        console.warn("Re-fetch after error failed, reverting optimistic UI", fetchErr);
+      } else if (typeof fetchGoals === "function") {
+        await fetchGoals();
+      } else {
+        // revert optimistic UI
         setGoals((prev) =>
           prev.map((g) =>
             g.id === goal.id
@@ -456,8 +555,24 @@ const filtered = useMemo(() => {
           )
         );
       }
+    } catch (fetchErr) {
+      console.warn("Re-fetch after error failed, reverting optimistic UI", fetchErr);
+      setGoals((prev) =>
+        prev.map((g) =>
+          g.id === goal.id
+            ? {
+                ...g,
+                liked: wasLiked,
+                cheers: originalCheers,
+                my_cheer_id: originalMyCheerId,
+              }
+            : g
+        )
+      );
     }
   }
+}
+
   async function deleteComment(goalId, commentId) {
   // Optimistic UI: remove comment immediately
   const previousComments = commentsByGoal[goalId] || [];
@@ -690,13 +805,10 @@ useEffect(() => {
                         <span>{g.cheers || 0}</span>
                       </button>
 
-                      <Link
-                        to={`/goal/${g.id}`}
-                        state={{ goal: g }}
-                        className="text-sm px-3 py-1 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100"
-                      >
-                        View goal
-                      </Link>
+                      <button onClick={() => viewGoal(g.id)} className="flex items-center gap-1 text-sm px-3 py-1 rounded-md bg-white text-black border border-gray-300 hover:bg-gray-100">
+                                        <HiOutlineEye className="w-4 h-4" />
+                                        View
+                                      </button>
                     </div>
                   </div>
 

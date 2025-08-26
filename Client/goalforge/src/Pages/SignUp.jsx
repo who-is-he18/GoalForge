@@ -11,19 +11,19 @@ export default function SignupStyled({ onSignup }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [profileImage, setProfileImage] = useState(null);
+  // const [profileImage, setProfileImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
-  const handleImageSelect = (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (file) {
-      setProfileImage(Object.assign(file, { preview: URL.createObjectURL(file) }));
-    }
-  };
+  // const handleImageSelect = (e) => {
+  //   const file = e.target.files && e.target.files[0];
+  //   if (file) {
+  //     setProfileImage(Object.assign(file, { preview: URL.createObjectURL(file) }));
+  //   }
+  // };
 
   const openFilePicker = () => {
     fileInputRef.current?.click();
@@ -128,7 +128,7 @@ setTimeout(() => {
 
         <form onSubmit={handleSignup} className="mt-6 space-y-4">
           <div className="text-sm">
-            <label className="block font-medium text-gray-700">Profile Picture (Optional)</label>
+            {/* <label className="block font-medium text-gray-700">Profile Picture (Optional)</label>
             <div className="flex flex-col items-center mt-3">
               <div className="w-20 h-20 rounded-full border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden bg-white">
                 {profileImage ? (
@@ -155,7 +155,7 @@ setTimeout(() => {
                 Choose Image
               </button>
               {profileImage && <p className="text-xs text-gray-500 mt-2">{profileImage.name}</p>}
-            </div>
+            </div> */}
           </div>
 
           <div>

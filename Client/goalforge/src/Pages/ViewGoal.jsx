@@ -197,7 +197,7 @@ export default function ViewGoal() {
             </div>
           </div>
           <div>
-            <Link to="/" className="text-sm px-3 py-1 rounded-md bg-white border border-gray-200">Back to feed</Link>
+            <Link to="/home" className="text-sm px-3 py-1 rounded-md bg-white border border-gray-200">Back to feed</Link>
           </div>
         </div>
       </header>

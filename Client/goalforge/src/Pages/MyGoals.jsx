@@ -631,7 +631,7 @@ setTimeout(() => {
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate(-1)} className="text-sm text-gray-600 flex items-center gap-2">
+            <button onClick={() => navigate('/home')} className="text-sm text-gray-600 flex items-center gap-2">
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="#111827" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               <span className="text-sm">Back</span>
             </button>
