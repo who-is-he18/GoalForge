@@ -96,6 +96,12 @@ export default function GoalForgeHome() {
   const [openComments, setOpenComments] = useState(new Set());
   const [commentInputs, setCommentInputs] = useState({});
   const [currentUser, setCurrentUser] = useState(null);
+  const [followMap, setFollowMap] = useState({});
+  const [followersCount, setFollowersCount] = useState({});
+  const [onlyFollowing, setOnlyFollowing] = useState(false);
+
+
+
 
     function viewGoal(id) {
     navigate(`/goal/${id}`, { state: { goal: goals.find(g => g.id === id) } });
@@ -191,6 +197,162 @@ const otherGoals = useMemo(() => {
   return goals.filter((g) => g.user_id !== currentUser.id);
 }, [goals, currentUser]);
 
+useEffect(() => {
+  // only fetch if user logged in
+  if (!currentUser?.id) {
+    setFollowMap({});
+    setFollowersCount({});
+    return;
+  }
+
+  let mounted = true;
+  const loadFollowers = async () => {
+    try {
+      const res = await api.get("/followers"); // returns list of all follower rows
+      if (!mounted) return;
+      const all = res.data || [];
+
+      // build followMap for current user + counts map for all goals
+      const fm = {};
+      const counts = {};
+
+      all.forEach((f) => {
+        // count for goal
+        counts[f.followed_goal_id] = (counts[f.followed_goal_id] || 0) + 1;
+        // if this row belongs to current user, mark in fm
+        if (f.follower_id === currentUser.id) {
+          fm[f.followed_goal_id] = f.id; // store the follower record id
+        }
+      });
+
+      setFollowMap(fm);
+      setFollowersCount(counts);
+    } catch (err) {
+      console.error("Failed to load followers", err);
+    }
+  };
+
+  loadFollowers();
+
+  return () => {
+    mounted = false;
+  };
+}, [currentUser]);
+// Optimistic follow
+// Follow a goal (optimistic + persisted)
+const followGoal = async (goal) => {
+  if (!currentUser?.id) {
+    alert("Please log in to follow goals.");
+    return;
+  }
+
+  const tempFollowerId = `temp-${Date.now()}`;
+
+  // optimistic UI
+  setFollowMap((p) => ({ ...p, [goal.id]: tempFollowerId }));
+  setFollowersCount((c) => ({ ...c, [goal.id]: (c[goal.id] || 0) + 1 }));
+
+  // optimistic dispatch so other pages update immediately
+  window.dispatchEvent(new CustomEvent("followers:changed", {
+    detail: { goalId: goal.id, action: "follow", followerId: tempFollowerId }
+  }));
+
+  try {
+    const payload = {
+      follower_id: currentUser.id,
+      followed_goal_id: goal.id,
+    };
+    const res = await api.post("/followers", payload);
+    const created = res.data || {};
+
+    // replace temp id with real id (only if still the temp)
+    setFollowMap((p) => {
+      const next = { ...p };
+      if (next[goal.id] === tempFollowerId) next[goal.id] = created.id;
+      return next;
+    });
+
+    // final dispatch with real id so listeners can use the real record id
+    window.dispatchEvent(new CustomEvent("followers:changed", {
+      detail: { goalId: goal.id, action: "follow", followerId: created.id }
+    }));
+
+    // optionally ensure followersCount is consistent with server response
+    setFollowersCount((c) => ({ ...c, [goal.id]: (c[goal.id] || 1) }));
+  } catch (err) {
+    console.error("Follow failed", err);
+    // rollback optimistic UI
+    setFollowMap((p) => {
+      const next = { ...p };
+      delete next[goal.id];
+      return next;
+    });
+    setFollowersCount((c) => ({ ...c, [goal.id]: Math.max(0, (c[goal.id] || 1) - 1) }));
+
+    // notify others to refresh/rollback
+    window.dispatchEvent(new CustomEvent("followers:changed", {
+      detail: { goalId: goal.id, action: "follow_rollback", followerId: tempFollowerId }
+    }));
+
+    alert("Failed to follow — please try again.");
+  }
+};
+
+// Unfollow a goal (optimistic + persisted)
+const unfollowGoal = async (goal) => {
+  if (!currentUser?.id) {
+    alert("Please log in to unfollow goals.");
+    return;
+  }
+
+  const existingFollowerId = followMap[goal.id];
+  if (!existingFollowerId) return; // nothing to do
+
+  // optimistic remove
+  setFollowMap((p) => {
+    const next = { ...p };
+    delete next[goal.id];
+    return next;
+  });
+  setFollowersCount((c) => ({ ...c, [goal.id]: Math.max(0, (c[goal.id] || 1) - 1) }));
+
+  // optimistic dispatch
+  window.dispatchEvent(new CustomEvent("followers:changed", {
+    detail: { goalId: goal.id, action: "unfollow", followerId: existingFollowerId }
+  }));
+
+  try {
+    // If it was a temp id, nothing to call on server
+    if (String(existingFollowerId).startsWith("temp-")) {
+      return;
+    }
+
+    await api.delete(`/followers/${existingFollowerId}`);
+
+    // success — nothing else to do, we've already dispatched
+  } catch (err) {
+    console.error("Unfollow failed", err);
+    // rollback: re-add mapping + increment count
+    setFollowMap((p) => ({ ...p, [goal.id]: existingFollowerId }));
+    setFollowersCount((c) => ({ ...c, [goal.id]: (c[goal.id] || 0) + 1 }));
+
+    // notify others to refresh/rollback
+    window.dispatchEvent(new CustomEvent("followers:changed", {
+      detail: { goalId: goal.id, action: "unfollow_rollback", followerId: existingFollowerId }
+    }));
+
+    alert("Failed to unfollow — please try again.");
+  }
+};
+
+// convenience wrapper used by UI
+const toggleFollow = (goal) => {
+  if (followMap[goal.id]) {
+    unfollowGoal(goal);
+  } else {
+    followGoal(goal);
+  }
+};
 
   // ---------- Fetch all comments once goals arrive ----------
 useEffect(() => {
@@ -267,6 +429,8 @@ const tags = useMemo(() => {
 
 const filtered = useMemo(() => {
   const q = debouncedQuery.trim().toLowerCase();
+
+  // base filtering (category + optional text search)
   let out = otherGoals.filter((g) => {
     if (category !== "All" && (g.category || "General") !== category) return false;
     if (!q) return true;
@@ -274,12 +438,26 @@ const filtered = useMemo(() => {
     return hay.includes(q);
   });
 
-  if (sortBy === "Newest") out = out.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  else if (sortBy === "Oldest") out = out.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-  else if (sortBy === "Trending") out = out.slice().sort((a, b) => (b.cheers || 0) - (a.cheers || 0));
+  // If user selected "Following" in the dropdown, narrow to followed goals first
+  if (sortBy === "Following") {
+    out = out.filter((g) => !!(followMap && followMap[g.id]));
+    // then sort by newest as a reasonable default for followed goals
+    out = out.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return out;
+  }
+
+  if (sortBy === "Newest") {
+    out = out.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  } else if (sortBy === "Oldest") {
+    out = out.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  } else if (sortBy === "Trending") {
+    out = out.slice().sort((a, b) => (b.cheers || 0) - (a.cheers || 0));
+  }
 
   return out;
-}, [otherGoals, debouncedQuery, category, sortBy]);
+}, [otherGoals, debouncedQuery, category, sortBy, followMap]);
+
+
 
 
   function handleClear() {
@@ -327,6 +505,9 @@ async function addComment(goal) {
     avatar: currentUser?.profile_pic || null,
     content: text,
     created_at: new Date().toISOString(),
+      // frontend-only like fields:
+    likes_count: 0,
+    liked: false,
   };
 
   setCommentsByGoal((prev) => ({
@@ -361,12 +542,23 @@ async function addComment(goal) {
     }
 
     const created = normalizeComment(serverCommentRaw || {});
+    created.likes_count = created.likes_count ?? created.likesCount ?? 0;
+    created.liked = created.liked ?? false;
 
     // Replace temp comment with server version
     setCommentsByGoal((prev) => ({
       ...prev,
       [goal.id]: (prev[goal.id] || []).map((c) => (c.id === tempId ? created : c)),
     }));
+    // after const created = normalizeComment(...)
+const stored = getStoredLikes();
+if (stored[tempId]) {
+  // move like to real id
+  stored[created.id] = true;
+  delete stored[tempId];
+  saveStoredLikes(stored);
+}
+
 
     // Update goals list: bump comment count and attach progressId if server created one
     setGoals((prev) =>
@@ -400,6 +592,84 @@ async function addComment(goal) {
     // Optionally show a toast/error to user here
   }
 }
+const LIKES_STORAGE_KEY = "app_comment_likes_v1"; // bump version to reset if you change shape
+
+const getStoredLikes = () => {
+  try {
+    const raw = localStorage.getItem(LIKES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    console.warn("Failed to read comment likes from localStorage", e);
+    return {};
+  }
+};
+
+const saveStoredLikes = (obj) => {
+  try {
+    localStorage.setItem(LIKES_STORAGE_KEY, JSON.stringify(obj || {}));
+  } catch (e) {
+    console.warn("Failed to save comment likes to localStorage", e);
+  }
+};
+
+// Toggle like/unlike for a comment (frontend-only)
+const toggleLikeComment = (goalId, commentId) => {
+  // update UI
+  setCommentsByGoal((prev) => {
+    const goalComments = [...(prev[goalId] || [])];
+    const updated = goalComments.map((c) => {
+      if (c.id !== commentId) return c;
+      const liked = !!c.liked;
+      return {
+        ...c,
+        liked: !liked,
+        likes_count: (c.likes_count ?? c.likesCount ?? 0) + (liked ? -1 : 1),
+      };
+    });
+    return { ...prev, [goalId]: updated };
+  });
+
+  // persist to localStorage
+  const stored = getStoredLikes();
+  if (stored[commentId]) {
+    // currently liked -> unlike (remove)
+    delete stored[commentId];
+  } else {
+    // not liked -> like
+    stored[commentId] = true;
+  }
+  saveStoredLikes(stored);
+};
+
+useEffect(() => {
+  const stored = getStoredLikes();
+  if (!stored || Object.keys(stored).length === 0) return;
+
+  setCommentsByGoal((prev) => {
+    let changed = false;
+    const next = {};
+
+    for (const goalId of Object.keys(prev)) {
+      next[goalId] = (prev[goalId] || []).map((c) => {
+        const shouldBeLiked = !!stored[c.id];
+        const alreadyLiked = !!c.liked;
+        if (shouldBeLiked && !alreadyLiked) {
+          changed = true;
+          return { ...c, liked: true, likes_count: (c.likes_count ?? 0) + 1 };
+        } else if (!shouldBeLiked && alreadyLiked) {
+          changed = true;
+          return { ...c, liked: false, likes_count: Math.max(0, (c.likes_count ?? 1) - 1) };
+        }
+        return c;created.likes_count = created.likes_count ?? created.likesCount ?? 0;
+created.liked = created.liked ?? false;
+      });
+    }
+
+    return changed ? next : prev;
+  });
+}, [commentsByGoal]); // re-run when comments change (safe — only writes if something needs update)
+
+
 
 
   function toggleComments(goal) {
@@ -708,14 +978,16 @@ useEffect(() => {
               <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-md px-3 py-2">
                 <span className="text-sm text-black">Sort by:</span>
                 <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="bg-transparent outline-none text-sm"
-                >
-                  <option>Newest</option>
-                  <option>Oldest</option>
-                  <option>Trending</option>
-                </select>
+  value={sortBy}
+  onChange={(e) => setSortBy(e.target.value)}
+  className="bg-transparent outline-none text-sm"
+>
+  <option>Newest</option>
+  <option>Oldest</option>
+  <option>Trending</option>
+  <option>Following</option> {/* NEW */}
+</select>
+
               </div>
               <button onClick={handleClear} className="text-sm text-black px-3 py-1">
                 Clear
@@ -746,7 +1018,33 @@ useEffect(() => {
                       </div>
                     </div>
 
-                    <div className="text-sm text-black">{g.timeAgo}</div>
+                    <div className="text-sm text-black">
+                                                {/* Follow button */}
+<button
+  onClick={() => toggleFollow(g)}
+  className={`flex items-center gap-2 text-sm px-3 py-1 rounded-md border ${
+    followMap[g.id]
+      ? "bg-green-50 border-green-100 text-green-700"
+      : "bg-white border-gray-200 text-black"
+  }`}
+>
+  {/* simple user-plus / check icon */}
+  {followMap[g.id] ? (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M10 17c-3.31 0-6 2.69-6 6h12c0-3.31-2.69-6-6-6zm0-2a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 7h-2V5h-2V3h2V1h2v2h2v2h-2v2z" />
+    </svg>
+  ) : (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+      <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3z" />
+      <path d="M2 21v-2c0-2.21 3.58-4 8-4s8 1.79 8 4v2" />
+      <path d="M22 7h-3M20 5v4" />
+    </svg>
+  )}
+
+  <span>{followMap[g.id] ? "Following" : "Follow"}</span>
+  <span className="text-xs text-gray-500">{followersCount[g.id] ?? 0}</span>
+</button>
+                    </div>
                   </div>
 
                   <p className="mt-4 text-black leading-relaxed">{g.description}</p>
@@ -766,8 +1064,6 @@ useEffect(() => {
     )}
   </div>
 </div>
-
-
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="bg-gray-50 border border-gray-100 rounded-md px-4 py-2 text-sm text-black inline-flex items-center">
@@ -775,7 +1071,10 @@ useEffect(() => {
                         <span>
                           {g.streak} • {g.totalDays} total days
                         </span>
+                        
                       </div>
+                                                                        <h2 className="text-sm text-black">Created on : {g.timeAgo}</h2>
+
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -828,11 +1127,20 @@ useEffect(() => {
                         />
                         <div className="mt-2 flex items-center justify-end gap-2">
                           <button
-                            onClick={() => setCommentInputs((p) => ({ ...p, [g.id]: "" }))}
-                            className="text-sm text-black px-3 py-1"
-                          >
-                            Cancel
-                          </button>
+  onClick={() => {
+    // clear the input
+    setCommentInputs((p) => ({ ...p, [g.id]: "" }));
+    // close comments (openComments is a Set)
+    setOpenComments((prev) => {
+      const clone = new Set(prev);
+      clone.delete(g.id);
+      return clone;
+    });
+  }}
+  className="text-sm text-black px-3 py-1"
+>
+  Cancel
+</button>
                           <button
                             onClick={() => addComment(g)}
                             className="text-sm px-3 py-1 rounded-md bg-black text-white"
@@ -853,22 +1161,44 @@ useEffect(() => {
                             <Avatar name={c.author || 'User'} />
                             <div className="flex-1">
                               <div className="flex items-baseline justify-between">
-                                <div>
-                                  <div className="text-sm font-semibold">{c.author || 'User'}</div>
-                                  <div className="text-xs text-black">{new Date(c.created_at || c.createdAt).toLocaleString()}</div>
-                                </div>
+  <div>
+    <div className="text-sm font-semibold">{c.author || 'User'}</div>
+    <div className="text-xs text-black">{new Date(c.created_at || c.createdAt).toLocaleString()}</div>
+  </div>
 
-                                {/* Show delete if comment owner OR goal owner */}
-                                {(currentUser?.id === c.user_id || currentUser?.id === g.user_id) && (
-                                   <button
-                                      onClick={() => deleteComment(g.id, c.id)}
-                                      aria-label="Delete comment"
-                                      className="ml-2 text-red-500 hover:text-red-700 p-1 rounded-md transition-colors"
-                                    >
-                                      <TrashIcon className="w-4 h-4" />
-                                    </button>
-                                )}
-                              </div>
+  <div className="ml-2 flex items-center gap-2">
+    {/* Like button */}
+    <button
+      onClick={() => toggleLikeComment(g.id, c.id)}
+      aria-label={c.liked ? "Unlike comment" : "Like comment"}
+      className="flex items-center gap-1 text-sm p-1 rounded-md hover:bg-gray-100 transition"
+    >
+      {/* simple heart/thumb svg — filled when liked */}
+      {c.liked ? (
+        <svg className="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+          <path d="M12 21s-7.5-4.9-9.6-7.1C-0.1 10.8 1.6 6.8 5 5.3 7 4.3 9.4 5 12 7c2.6-2 5-2.7 7-1.7 3.4 1.5 5.1 5.5 2.6 8.6C19.5 16.1 12 21 12 21z"/>
+        </svg>
+      ) : (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+          <path d="M20.8 8.6c-.9-3.2-4.1-4.6-6.5-3.3C12.3 6 12 6.2 12 6.2s-.3-.2-2.3-1c-2.4-1.3-5.6.1-6.5 3.3C2.2 10 4.9 14 7.5 16.6 10.2 19.3 12 21 12 21s1.8-1.7 4.5-4.4C19.1 14 21.9 10 20.8 8.6z" />
+        </svg>
+      )}
+
+      <span className="text-xs">{c.likes_count ?? 0}</span>
+    </button>
+
+    {/* Show delete if comment owner OR goal owner */}
+    {(currentUser?.id === c.user_id || currentUser?.id === g.user_id) && (
+      <button
+        onClick={() => deleteComment(g.id, c.id)}
+        aria-label="Delete comment"
+        className="text-red-500 hover:text-red-700 p-1 rounded-md transition-colors"
+      >
+        <TrashIcon className="w-4 h-4" />
+      </button>
+    )}
+  </div>
+</div>
                               <div className="mt-1 text-black">{c.content || c.text}</div>
                             </div>
                           </div>

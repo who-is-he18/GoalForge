@@ -76,6 +76,14 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  // counts derived from /api/followers and /api/goals
+const [followersOfGoalsCount, setFollowersOfGoalsCount] = useState(0); // people following this user's goals
+const [followingCountProfile, setFollowingCountProfile] = useState(0); // how many goals this profile user follows
+// id of the profile being viewed (for /me this will be the logged-in user id)
+const [profileUserId, setProfileUserId] = useState(null);
+
+
+
   // ----------------------
   // Fetch profile + badges on mount (uses axios `api` instance)
   // ----------------------
@@ -88,6 +96,8 @@ export default function Profile() {
         const { data: me } = await api.get('/me');
 
         if (!isMounted) return;
+        if (me && me.id) setProfileUserId(me.id);
+
 
         // Map returned fields with safe fallbacks
         setUsername(me.username ? (me.username.startsWith('@') ? me.username : `@${me.username}`) : '@user');
@@ -127,6 +137,10 @@ export default function Profile() {
           } catch (e) {
             // ignore
           }
+          if (isMounted && me && me.id) {
+  setProfileUserId(me.id);
+}
+
 
           return [];
         };
@@ -256,6 +270,48 @@ export default function Profile() {
       setLoading(false);
     }
   };
+useEffect(() => {
+  // wait until we know which profile we're viewing
+  if (!profileUserId) return;
+
+  let mounted = true;
+
+  async function loadFollowerStats() {
+    try {
+      const [followersRes, goalsRes] = await Promise.all([api.get("/followers"), api.get("/goals")]);
+      if (!mounted) return;
+
+      const followers = followersRes.data || [];
+      const allGoals = goalsRes.data || [];
+
+      const userGoalIds = allGoals.filter((gg) => gg.user_id === profileUserId).map((gg) => gg.id);
+
+      const followersOfGoals = followers.filter((f) => userGoalIds.includes(f.followed_goal_id)).length;
+      const followingCount = followers.filter((f) => f.follower_id === profileUserId).length;
+
+      setFollowersOfGoalsCount(followersOfGoals);
+      setFollowingCountProfile(followingCount);
+
+      // keep older stats shape in sync if you rely on it elsewhere
+      setStats((prev) => ({ ...prev, following_count: followingCount }));
+    } catch (err) {
+      console.error("Failed to load follower stats", err);
+    }
+  }
+
+  loadFollowerStats();
+
+  const handler = () => {
+    // simplest approach: reload counts when a follow/unfollow happens
+    loadFollowerStats();
+  };
+  window.addEventListener("followers:changed", handler);
+
+  return () => {
+    mounted = false;
+    window.removeEventListener("followers:changed", handler);
+  };
+}, [profileUserId]); // runs once profileUserId is available and whenever it changes
 
   // ----------------------
   // Render
@@ -325,11 +381,6 @@ export default function Profile() {
                     value={tempUsername}
                     onChange={(e) => setTempUsername(e.target.value)}
                   />
-                  <input
-                    className="text-gray-500 text-base text-center border border-gray-300 rounded-lg px-2 py-1 w-full mt-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                    value={tempDisplayName}
-                    onChange={(e) => setTempDisplayName(e.target.value)}
-                  />
                   <div className="flex gap-2 mt-4">
                     <button
                       className="bg-blue-600 text-white px-4 py-1.5 rounded-lg font-medium hover:bg-blue-700 transition"
@@ -380,23 +431,34 @@ export default function Profile() {
             <div className="bg-gray-50 rounded-2xl p-6 shadow-sm">
               <div className="font-medium text-base mb-4">Stats</div>
               <div className="flex flex-wrap gap-6">
-                <div>
-                  <div className="font-bold text-xl text-gray-900">{stats.total_goals}</div>
-                  <div className="text-gray-500 text-sm">Total Goals</div>
-                </div>
-                <div>
-                  <div className="font-bold text-xl text-green-700">{stats.completed_goals}</div>
-                  <div className="text-gray-500 text-sm">Completed</div>
-                </div>
-                <div>
-                  <div className="font-bold text-xl text-orange-500">{stats.current_streak}</div>
-                  <div className="text-gray-500 text-sm">Current Streak</div>
-                </div>
-                <div>
-                  <div className="font-bold text-xl text-purple-700">{stats.following_count}</div>
-                  <div className="text-gray-500 text-sm">Following</div>
-                </div>
-              </div>
+  <div>
+    <div className="font-bold text-xl text-gray-900">{stats.total_goals}</div>
+    <div className="text-gray-500 text-sm">Total Goals</div>
+  </div>
+
+  <div>
+    <div className="font-bold text-xl text-green-700">{stats.completed_goals}</div>
+    <div className="text-gray-500 text-sm">Completed</div>
+  </div>
+
+  <div>
+    <div className="font-bold text-xl text-orange-500">{stats.current_streak}</div>
+    <div className="text-gray-500 text-sm">Current Streak</div>
+  </div>
+
+  {/* Following: how many goals this user is following */}
+  <div>
+    <div className="font-bold text-xl text-purple-700">{followingCountProfile}</div>
+    <div className="text-gray-500 text-sm">Following</div>
+  </div>
+
+  {/* Followers: how many people follow this user's goals */}
+  <div>
+    <div className="font-bold text-xl text-indigo-700">{followersOfGoalsCount}</div>
+    <div className="text-gray-500 text-sm">Followers</div>
+  </div>
+</div>
+
             </div>
           </div>
 

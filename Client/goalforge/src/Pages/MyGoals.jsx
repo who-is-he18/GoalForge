@@ -246,6 +246,9 @@ export default function MyGoals({ currentUser }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  // Map: goalId -> number of followers
+const [followersCountMap, setFollowersCountMap] = useState({});
+
 
   const visibleGoals = useMemo(() => {
     if (activeTab === "all") return goals;
@@ -624,6 +627,74 @@ setTimeout(() => {
       setLoading(false);
     }
   };
+useEffect(() => {
+  let mounted = true;
+
+  // load all followers and build counts
+  const loadFollowerCounts = async () => {
+    try {
+      const res = await api.get("/followers");
+      if (!mounted) return;
+      const list = res.data || [];
+      const counts = {};
+      list.forEach((f) => {
+        // backend uses followed_goal_id per your model
+        const goalId = f.followed_goal_id || f.followed_goal || f.followed_goalId;
+        if (!goalId) return;
+        counts[goalId] = (counts[goalId] || 0) + 1;
+      });
+      setFollowersCountMap(counts);
+    } catch (err) {
+      console.error("Failed to load follower counts", err);
+    }
+  };
+
+  loadFollowerCounts();
+
+  // incremental updates when other pages dispatch followers:changed
+  const handler = (e) => {
+    // if event contains detail, apply incremental change for performance
+    try {
+      const detail = e?.detail;
+      if (!detail || !detail.goalId) {
+        // fallback: reload full counts
+        loadFollowerCounts();
+        return;
+      }
+
+      const { goalId, action } = detail;
+      setFollowersCountMap((prev) => {
+        const next = { ...prev };
+        if (action === "follow") {
+          next[goalId] = (next[goalId] || 0) + 1;
+        } else if (action === "unfollow") {
+          next[goalId] = Math.max(0, (next[goalId] || 1) - 1);
+        } else if (action === "follow_rollback") {
+          // rollback a failed follow: decrement
+          next[goalId] = Math.max(0, (next[goalId] || 1) - 1);
+        } else if (action === "unfollow_rollback") {
+          // rollback a failed unfollow: increment
+          next[goalId] = (next[goalId] || 0) + 1;
+        } else {
+          // unknown action -> reload to be safe
+          loadFollowerCounts();
+        }
+        return next;
+      });
+    } catch (err) {
+      // on any error just reload full counts
+      console.error("Error handling followers:changed event", err);
+      loadFollowerCounts();
+    }
+  };
+
+  window.addEventListener("followers:changed", handler);
+
+  return () => {
+    mounted = false;
+    window.removeEventListener("followers:changed", handler);
+  };
+}, []); // one-time subscribe; you can add dependencies if needed
 
 
   return (
@@ -702,10 +773,12 @@ setTimeout(() => {
                 </div>
 
                 <div className="flex-1">
-                  <div className="text-cyan-600 font-bold flex items-center"><IconFollowers />{g.followers}</div>
+                  <div className="text-cyan-600 font-bold flex items-center"><IconFollowers />{followersCountMap[g.id] ?? g.followers ?? 0}
+</div>
                   <div className="text-xs text-gray-400">Followers</div>
                 </div>
               </div>
+
 
               <div className="mt-4">
                 <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
