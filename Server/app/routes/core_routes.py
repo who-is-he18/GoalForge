@@ -2,7 +2,7 @@
 
 from flask_restful import Resource, reqparse
 from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
-from flask import request, current_app
+from flask import request, current_app , make_response
 from app.models import (
     User, Goal, GoalProgress, Comment, Cheer,
     Badge, UserBadge, Follower, Notification
@@ -259,7 +259,6 @@ class GoalProgressListResource(Resource):
         parser.add_argument('xp_earned', type=int, default=10)
         args = parser.parse_args()
 
-        # Convert date string to Python date object
         date_obj = datetime.strptime(args['date'], "%Y-%m-%d").date()
 
         progress = GoalProgress(
@@ -272,21 +271,50 @@ class GoalProgressListResource(Resource):
 
         db.session.add(progress)
         db.session.commit()
-                # Recompute streaks for the parent goal
+
+        # Recompute streaks for the parent goal
         goal = Goal.query.get(progress.goal_id)
         if goal:
-            # refresh relationship if lazy; ensure progress logs include the new one
             db.session.refresh(goal)
             cur_streak, longest = compute_streaks_for_goal(goal)
             goal.streak_count = cur_streak
             goal.longest_streak = max(goal.longest_streak or 0, longest)
             db.session.commit()
 
-        # return the created progress and optionally the updated goal
+            # --- BADGE LOGIC ---
+            user_id = goal.user_id if hasattr(goal, 'user_id') else None
+            if user_id:
+                self.check_and_award_badges_for_progress(user_id, goal, date_obj)
+
         return {
             "progress": progress_single_schema.dump(progress),
             "goal": goal_schema.dump(goal) if goal else None
         }, 201
+
+    def check_and_award_badges_for_progress(self, user_id, goal, date_obj):
+        """Check and award badges related to logging progress."""
+        # 1) Early Bird badge: logging before 6 AM
+        if datetime.now().hour < 6:
+            early_bird_badge = Badge.query.filter_by(name="Early Bird").first()
+            if early_bird_badge and not UserBadge.query.filter_by(user_id=user_id, badge_id=early_bird_badge.id).first():
+                db.session.add(UserBadge(user_id=user_id, badge_id=early_bird_badge.id))
+                db.session.commit()
+
+        # 2) 7-Day Streak badge
+        if goal.streak_count >= 7:
+            streak_badge = Badge.query.filter_by(name="7-Day Streak").first()
+            if streak_badge and not UserBadge.query.filter_by(user_id=user_id, badge_id=streak_badge.id).first():
+                db.session.add(UserBadge(user_id=user_id, badge_id=streak_badge.id))
+                db.session.commit()
+
+        # 3) Goal Master badge: check if user completed 10 goals
+        completed_goals = Goal.query.filter_by(user_id=user_id, is_completed=True).count()
+        if completed_goals >= 10:
+            goal_master_badge = Badge.query.filter_by(name="Goal Master").first()
+            if goal_master_badge and not UserBadge.query.filter_by(user_id=user_id, badge_id=goal_master_badge.id).first():
+                db.session.add(UserBadge(user_id=user_id, badge_id=goal_master_badge.id))
+                db.session.commit()
+
 
 
 class GoalProgressResource(Resource):
@@ -451,7 +479,6 @@ class CheerListResource(Resource):
         if gp_id:
             query = query.filter_by(goal_progress_id=gp_id)
         elif goal_id:
-            # join to GoalProgress to retrieve cheers for any progress of a goal
             query = query.join(GoalProgress, Cheer.goal_progress_id == GoalProgress.id).filter(GoalProgress.goal_id == goal_id)
 
         cheers = query.order_by(Cheer.created_at.asc()).all()
@@ -463,59 +490,58 @@ class CheerListResource(Resource):
         gp_id = data.get("goal_progress_id")
         goal_id = data.get("goal_id")
 
-        # Must provide either a progress id or a goal id
         if not gp_id and not goal_id:
             return {"message": "goal_progress_id or goal_id is required"}, 400
 
-        # If no gp_id provided, validate goal and create a minimal GoalProgress
+        # If only goal_id is provided, auto-create a GoalProgress record
         if not gp_id:
             goal = Goal.query.get(goal_id)
             if not goal:
                 return {"message": "Goal not found"}, 404
-
-            gp = GoalProgress(
-                goal_id=goal.id,
-                date=date.today(),            # required field in your model
-                note="Auto-created for cheer",
-                xp_earned=0
-            )
+            gp = GoalProgress(goal_id=goal.id, date=date.today(), note="Auto-created for cheer", xp_earned=0)
             db.session.add(gp)
             db.session.commit()
             gp_id = gp.id
 
-        # get user id from JWT
+        # --- FIX for identity type issue ---
         identity = get_jwt_identity()
-        if isinstance(identity, int):
-            user_id = identity
-        elif isinstance(identity, dict):
+        if isinstance(identity, dict):
             user_id = identity.get("id")
         else:
-            user_id = identity
+            try:
+                user_id = int(identity)
+            except (ValueError, TypeError):
+                return {"message": "Invalid user identity"}, 401
 
         if not user_id:
             return {"message": "Invalid user identity"}, 401
 
-        # prevent duplicate cheer by same user on same progress
+        # Check if user has already cheered this GoalProgress
         existing = Cheer.query.filter_by(user_id=user_id, goal_progress_id=gp_id).first()
         if existing:
-            # return existing cheer (200) — frontend will treat this as idempotent
             cheer_obj = cheer_schema.dump(existing)
-            # attach helpful extras
             cheer_count = Cheer.query.filter_by(goal_progress_id=gp_id).count()
             cheer_obj.update({"goal_progress_id": gp_id, "cheer_count": cheer_count})
             return cheer_obj, 200
 
-        # create cheer
+        # Create a new cheer
         cheer = Cheer(user_id=user_id, goal_progress_id=gp_id, created_at=datetime.utcnow())
         db.session.add(cheer)
         db.session.commit()
 
-        # compute new total for convenience
-        cheer_count = Cheer.query.filter_by(goal_progress_id=gp_id).count()
+        # --- BADGE LOGIC for "Cheer Giver" ---
+        cheer_count_by_user = Cheer.query.filter_by(user_id=user_id).count()
+        cheer_badge = Badge.query.filter_by(name="Cheer Giver").first()
+        if cheer_badge and cheer_count_by_user >= 4 and not UserBadge.query.filter_by(user_id=user_id, badge_id=cheer_badge.id).first():
+            db.session.add(UserBadge(user_id=user_id, badge_id=cheer_badge.id))
+            db.session.commit()
 
+        cheer_count = Cheer.query.filter_by(goal_progress_id=gp_id).count()
         response = cheer_schema.dump(cheer)
         response.update({"goal_progress_id": gp_id, "cheer_count": cheer_count})
         return response, 201
+
+
 
 class CheerResource(Resource):
     """Resource for retrieving, updating, or deleting a single cheer."""
@@ -596,10 +622,52 @@ class BadgeResource(Resource):
         return {"message": "Badge deleted"}, 200
 
 class UserBadgeListResource(Resource):
-    """Resource for listing all user badges."""
     def get(self):
-        user_badges = UserBadge.query.all()
+        parser = reqparse.RequestParser()
+        parser.add_argument('user_id', type=int, required=False, location='args')
+        args = parser.parse_args()
+
+        if args.get('user_id'):
+            user_id = args['user_id']
+            user_badges = UserBadge.query.filter_by(user_id=user_id).order_by(UserBadge.awarded_at.desc()).all()
+
+            # If user has no badges, assign the default badge dynamically
+            if not user_badges:
+                # Check if the default badge exists
+                default_badge = Badge.query.filter_by(name="Welcome Aboard").first()
+                if not default_badge:
+                    default_badge = Badge(name="Welcome Aboard", description="Created an account")
+                    db.session.add(default_badge)
+                    db.session.commit()
+
+                # Assign default badge to user
+                new_user_badge = UserBadge(user_id=user_id, badge_id=default_badge.id)
+                db.session.add(new_user_badge)
+                db.session.commit()
+
+                # Re-fetch badges so that we include the newly added badge
+                user_badges = [new_user_badge]
+        else:
+            user_badges = UserBadge.query.order_by(UserBadge.awarded_at.desc()).all()
+
         return user_badges_schema.dump(user_badges), 200
+
+
+
+    @jwt_required()
+    def post(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('user_id', type=int, required=True)
+        parser.add_argument('badge_id', type=int, required=True)
+        args = parser.parse_args()
+
+        user_badge = UserBadge(
+            user_id=args['user_id'],
+            badge_id=args['badge_id']
+        )
+        db.session.add(user_badge)
+        db.session.commit()
+        return user_badge_schema.dump(user_badge), 201
 
     @jwt_required()
     def post(self):
@@ -644,7 +712,106 @@ class UserBadgeResource(Resource):
         db.session.delete(user_badge)
         db.session.commit()
         return {"message": "User badge deleted"}, 200
+class UserBadgesByUserResource(Resource):
+    def get(self, user_id):
+        user_badges = UserBadge.query.filter_by(user_id=user_id).order_by(UserBadge.awarded_at.desc()).all()
+        return user_badges_schema.dump(user_badges), 200
 
+def _iso(dt):
+    if not dt: 
+        return None
+    if isinstance(dt, str):
+        return dt
+    return dt.isoformat()
+
+class UserActivityResource(Resource):
+    # optional: allow preflight explicitly (not required if flask-cors is configured)
+    def options(self, user_id):
+        resp = make_response("", 200)
+        return resp
+
+    # If you want this endpoint to require auth, uncomment @jwt_required()
+    # @jwt_required()
+    def get(self, user_id):
+        events = []
+
+        # 1) badge awards
+        try:
+            user_badges = UserBadge.query.filter_by(user_id=user_id).order_by(UserBadge.awarded_at.desc()).all()
+            for ub in user_badges:
+                badge = getattr(ub, "badge", None)
+                events.append({
+                    "type": "badge_awarded",
+                    "timestamp": _iso(getattr(ub, "awarded_at", None)),
+                    "payload": {
+                        "user_badge_id": ub.id,
+                        "badge_id": ub.badge_id,
+                        "badge": {
+                            "id": badge.id if badge else ub.badge_id,
+                            "name": badge.name if badge else None,
+                            "description": badge.description if badge else None,
+                            "icon_url": badge.icon_url if badge else None
+                        }
+                    }
+                })
+        except Exception:
+            # ignore if model not present or error
+            pass
+
+        # 2) goals (created/completed) - adapt fields to your Goal model
+        try:
+            goals = Goal.query.filter_by(user_id=user_id).all()
+            for g in goals:
+                created_at = getattr(g, "created_at", None)
+                completed_at = getattr(g, "completed_at", None) or getattr(g, "completed_on", None)
+
+                if created_at:
+                    events.append({
+                        "type": "goal_created",
+                        "timestamp": _iso(created_at),
+                        "payload": {"goal_id": g.id, "title": getattr(g, "title", None)}
+                    })
+                if completed_at:
+                    events.append({
+                        "type": "goal_completed",
+                        "timestamp": _iso(completed_at),
+                        "payload": {"goal_id": g.id, "title": getattr(g, "title", None)}
+                    })
+        except Exception:
+            pass
+
+        # 3) follower events (someone followed this user's goal) - adapt to your follower model
+        try:
+            # If your Follower model stores followed_goal_id -> we need to join to goal owner
+            followers = Follower.query.all()
+            for f in followers:
+                # If your model contains followed_goal_id -> find goal and check owner
+                fg = getattr(f, "followed_goal_id", None)
+                if fg:
+                    goal = Goal.query.get(fg)
+                    if goal and getattr(goal, "user_id", None) == user_id:
+                        events.append({
+                            "type": "follow",
+                            "timestamp": _iso(getattr(f, "followed_at", None) or getattr(f, "created_at", None)),
+                            "payload": {"follower_id": getattr(f, "follower_id", None), "followed_goal_id": fg}
+                        })
+                else:
+                    # alternative follower model shape: if follower has a 'followee_user_id' etc
+                    if getattr(f, "followee_user_id", None) == user_id:
+                        events.append({
+                            "type": "follow",
+                            "timestamp": _iso(getattr(f, "created_at", None)),
+                            "payload": {"follower_id": getattr(f, "follower_id", None)}
+                        })
+        except Exception:
+            pass
+
+        # combine & sort by timestamp (descending)
+        events = [e for e in events if e.get("timestamp")]
+        events.sort(key=lambda x: x["timestamp"], reverse=True)
+
+        # limit to 100 events to avoid huge payloads
+        return events[:100], 200
 class FollowerListResource(Resource):
     """Resource for listing all followers."""
     def get(self):

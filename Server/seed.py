@@ -1,5 +1,4 @@
 # seed.py
-
 from app import create_app
 from app.extensions import db
 from app.models import *
@@ -9,7 +8,7 @@ import random
 app = create_app()
 
 with app.app_context():
-    # Reset all tables in the database
+    # Reset DB
     db.drop_all()
     db.create_all()
 
@@ -22,11 +21,10 @@ with app.app_context():
             username=f"user{i+1}",
             email=f"user{i+1}@goalforge.com"
         )
-        user.set_password("test1234")  # All test users use this password
+        user.set_password("test1234")
         db.session.add(user)
         users.append(user)
 
-    # Admin user
     admin = User(
         username="admin",
         email="admin@goalforge.com",
@@ -51,7 +49,6 @@ with app.app_context():
         )
         db.session.add(goal)
         goals.append(goal)
-
     db.session.commit()
 
     # --- PROGRESS LOGS ---
@@ -64,7 +61,6 @@ with app.app_context():
                 xp_earned=random.choice([10, 15, 20])
             )
             db.session.add(log)
-
     db.session.commit()
 
     # --- CHEERS ---
@@ -72,7 +68,6 @@ with app.app_context():
         for progress in GoalProgress.query.all():
             if random.choice([True, False]):
                 db.session.add(Cheer(user_id=user.id, goal_progress_id=progress.id))
-
     db.session.commit()
 
     # --- COMMENTS ---
@@ -82,18 +77,38 @@ with app.app_context():
             goal_progress_id=progress.id,
             content="Nice work!"
         ))
-
     db.session.commit()
 
     # --- BADGES ---
-    badge1 = Badge(name="7-Day Streak", description="Logged 7 days in a row")
-    badge2 = Badge(name="Cheer Giver", description="Gave 5 cheers")
-    db.session.add_all([badge1, badge2])
+    # Ensure default badge exists
+    default_badge = Badge.query.filter_by(name="Welcome Aboard").first()
+    if not default_badge:
+        default_badge = Badge(name="Welcome Aboard", description="Created an account")
+        db.session.add(default_badge)
+        db.session.commit()
+
+    # Other badges
+    badge_streak = Badge(name="7-Day Streak", description="Logged 7 days in a row")
+    badge_cheer = Badge(name="Cheer Giver", description="Gave 4 cheers")
+    badge_goal_master = Badge(name="Goal Master", description="Completed 10 goals")
+    badge_early_bird = Badge(name="Early Bird", description="Logged before 6am")
+
+    db.session.add_all([badge_streak, badge_cheer, badge_goal_master, badge_early_bird])
     db.session.commit()
 
     # --- USER BADGES ---
-    db.session.add(UserBadge(user_id=users[0].id, badge_id=badge1.id))
-    db.session.add(UserBadge(user_id=users[1].id, badge_id=badge2.id))
+    for user in users:
+        # Every user gets the default badge
+        db.session.add(UserBadge(user_id=user.id, badge_id=default_badge.id))
+
+        # Randomly assign 0–2 additional badges
+        extra_badges = random.sample(
+            [badge_streak, badge_cheer, badge_goal_master, badge_early_bird],
+            k=random.randint(0, 2)
+        )
+        for extra_badge in extra_badges:
+            db.session.add(UserBadge(user_id=user.id, badge_id=extra_badge.id))
+
     db.session.commit()
 
     # --- FOLLOWERS ---

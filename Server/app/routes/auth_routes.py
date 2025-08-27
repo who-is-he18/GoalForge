@@ -10,7 +10,7 @@ from sqlalchemy import func
 
 
 from app.models import (
-    db, User, Goal, GoalProgress, Cheer, Comment, Follower, UserBadge, Notification, TokenBlocklist
+    db, User, Goal, GoalProgress, Cheer, Comment, Follower, UserBadge, Notification, TokenBlocklist, Badge
 )
 from app.extensions import db
 
@@ -30,7 +30,6 @@ class RegisterResource(Resource):
         password = data.get("password")
         confirm_password = data.get("confirm_password")
         
-
         # Validate all fields are present
         if not all([username, email, password, confirm_password]):
             return {"message": "All fields are required."}, 400
@@ -61,6 +60,21 @@ class RegisterResource(Resource):
         db.session.add(user)
         db.session.commit()
 
+        # Ensure the default badge exists (create it if not present)
+        default_badge = Badge.query.filter_by(name="Welcome Aboard").first()
+        if not default_badge:
+            default_badge = Badge(
+                name="Welcome Aboard",
+                description="Awarded for creating an account"
+            )
+            db.session.add(default_badge)
+            db.session.commit()
+
+        # Assign default badge to the new user
+        user_badge = UserBadge(user_id=user.id, badge_id=default_badge.id)
+        db.session.add(user_badge)
+        db.session.commit()
+
         # Auto-login: generate JWT token
         access_token = create_access_token(identity=str(user.id))
 
@@ -73,6 +87,7 @@ class RegisterResource(Resource):
                 "email": user.email
             }
         }, 201
+
 
 
 class LoginResource(Resource):

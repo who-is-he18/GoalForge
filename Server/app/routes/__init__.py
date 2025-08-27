@@ -21,6 +21,8 @@ from .core_routes import (
     UserBadgeResource,       # Handles individual user-badge operations
     FollowerResource,        # Handles individual follower operations
     NotificationResource,       # Handles individual notification operations
+    UserBadgesByUserResource,   # Handles fetching badges for a specific user
+    UserActivityResource        # Handles fetching activity for a specific user
 
 )
 
@@ -73,6 +75,12 @@ def register_routes(api):
     api.add_resource(BadgeResource, '/api/badges/<int:badge_id>')            # Single badge
     api.add_resource(UserBadgeListResource, '/api/user-badges')              # All user badges
     api.add_resource(UserBadgeResource, '/api/user-badges/<int:user_badge_id>')  # Single user badge
+    api.add_resource(UserBadgesByUserResource, '/api/users/<int:user_id>/badges')
+
+    # register
+    api.add_resource(UserActivityResource, '/api/users/<int:user_id>/activity')
+
+
     api.add_resource(NotificationListResource, '/api/notifications')         # Notification management
     api.add_resource(NotificationResource, '/api/notifications/<int:notification_id>')
 

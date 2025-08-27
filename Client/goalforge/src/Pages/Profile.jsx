@@ -4,6 +4,8 @@ import { IoMdCalendar } from "react-icons/io";
 import profilePic from "../assets/profile-placeholder.png"; // fallback image
 import api from "../api";
 import { ToastContainer, toast } from 'react-toastify';
+import { useNavigate } from "react-router-dom";
+
 
 
 // Local UI fallback badges (keeps your existing UI when backend badges are missing)
@@ -81,6 +83,13 @@ const [followersOfGoalsCount, setFollowersOfGoalsCount] = useState(0); // people
 const [followingCountProfile, setFollowingCountProfile] = useState(0); // how many goals this profile user follows
 // id of the profile being viewed (for /me this will be the logged-in user id)
 const [profileUserId, setProfileUserId] = useState(null);
+// new state
+const navigate = useNavigate();
+
+const [recentActivity, setRecentActivity] = useState([]);
+const [activityLoading, setActivityLoading] = useState(false);
+
+
 
 
 
@@ -109,41 +118,86 @@ const [profileUserId, setProfileUserId] = useState(null);
         setXp(me.xp != null ? me.xp : 0);
         setProfileImage(me.profile_pic ? me.profile_pic : profilePic);
         if (me.stats) setStats(me.stats);
+        // --- after setProfileImage / setStats etc. in your existing load() ---
+try {
+  // primary: dedicated per-user route (recommended if you added it)
+  const { data: userBadges } = await api.get(`/users/${me.id}/badges`).catch(() =>
+    api.get('/user-badges', { params: { user_id: me.id } })
+  );
 
-        // Try badges: prefer user-specific endpoint first
-        const tryFetchBadges = async () => {
-          const userId = me.id;
+  const ub = Array.isArray(userBadges) ? userBadges : (userBadges ? [userBadges] : []);
 
-          // 1) try GET /user-badges?user_id=
-          try {
-            const { data: list1 } = await api.get(`/user-badges`, { params: { user_id: userId } });
-            if (Array.isArray(list1) && list1.length) return list1;
-          } catch (e) {
-            // ignore and try next
-          }
+  const mapped = ub.map((ubItem) => {
+    const awardedAt = ubItem.awarded_at || ubItem.created_at || ubItem.awardedAt || null;
+    if (ubItem.badge) {
+      return {
+        id: ubItem.id,
+        title: ubItem.badge.name,
+        desc: ubItem.badge.description,
+        date: awardedAt ? new Date(awardedAt).toLocaleDateString() : '',
+        icon_url: ubItem.badge.icon_url || null,
+      };
+    }
 
-          // 2) try GET /user-badges/:id
-          try {
-            const { data: single } = await api.get(`/user-badges/${userId}`);
-            if (single) return Array.isArray(single) ? single : [single];
-          } catch (e) {
-            // ignore
-          }
+    // fallback: try to map to existing fallbackBadges (your current behavior)
+    const fb = fallbackBadges.find((f) => f.id === ubItem.badge_id) || fallbackBadges[ubItem.badge_id - 1];
+    return {
+      id: ubItem.id,
+      title: fb ? fb.title : `Badge #${ubItem.badge_id}`,
+      desc: fb ? fb.desc : '',
+      date: awardedAt ? new Date(awardedAt).toLocaleDateString() : '',
+      icon_url: null,
+    };
+  });
 
-          // 3) fallback to GET /user-badges and filter
-          try {
-            const { data: all } = await api.get('/user-badges');
-            if (Array.isArray(all)) return all.filter((ub) => ub.user_id === me.id);
-          } catch (e) {
-            // ignore
-          }
-          if (isMounted && me && me.id) {
-  setProfileUserId(me.id);
+  setBadges(mapped.length ? mapped : fallbackBadges.map((b) => ({ id: b.id, title: b.title, desc: b.desc, date: b.date, icon_url: null })));
+} catch (e) {
+  console.warn("Failed to load user badges, using fallbacks", e);
+  setBadges(fallbackBadges.map((b) => ({ id: b.id, title: b.title, desc: b.desc, date: b.date, icon_url: null })));
 }
 
 
-          return [];
-        };
+        // Try badges: prefer user-specific endpoint first
+// replace your tryFetchBadges implementation with this
+const tryFetchBadges = async () => {
+  const userId = me.id;
+  // 1) Try dedicated per-user route first (if you implemented it)
+  try {
+    const res = await api.get(`/users/${userId}/badges`);
+    if (res && Array.isArray(res.data)) return res.data;
+    // if the endpoint returns an object, try to normalise
+    if (res && res.data && Array.isArray(res.data.user_badges)) return res.data.user_badges;
+  } catch (err) {
+    // ignore 404 (means endpoint not implemented). Log other errors.
+    if (!(err.response && err.response.status === 404)) {
+      console.warn("Error fetching /users/:id/badges", err);
+    }
+  }
+
+  // 2) Try list endpoint with query param
+  try {
+    const res = await api.get('/user-badges', { params: { user_id: userId } });
+    if (res && Array.isArray(res.data)) return res.data;
+  } catch (err) {
+    if (!(err.response && err.response.status === 415)) {
+      // 415 previously happened — you've likely fixed it. Log otherwise.
+      console.warn("Error fetching /user-badges?user_id=", err);
+    }
+  }
+
+  // 3) Fallback: fetch all user-badges and filter client-side
+  try {
+    const res = await api.get('/user-badges');
+    if (res && Array.isArray(res.data)) {
+      return res.data.filter((ub) => ub.user_id === userId);
+    }
+  } catch (err) {
+    console.warn("Failed to fetch all user-badges (final fallback)", err);
+  }
+
+  return [];
+};
+
 
         const ub = await tryFetchBadges();
         if (!isMounted) return;
@@ -313,6 +367,47 @@ useEffect(() => {
   };
 }, [profileUserId]); // runs once profileUserId is available and whenever it changes
 
+useEffect(() => {
+  if (!profileUserId) return;
+  let mounted = true;
+
+  async function loadActivity() {
+    setActivityLoading(true);
+    try {
+      // Try dedicated aggregated activity endpoint first
+      const { data: act } = await api.get(`/users/${profileUserId}/activity`).catch(() => ({ data: null }));
+      if (mounted && act && Array.isArray(act) && act.length) {
+        setRecentActivity(act);
+        return;
+      }
+
+      // Fallback: build activity from user-badges at minimum
+      const { data: ubList } = await api.get('/user-badges', { params: { user_id: profileUserId } });
+      const badgeActs = (ubList || []).map((ub) => {
+        const awardedAt = ub.awarded_at || ub.created_at || ub.awardedAt || null;
+        return {
+          id: `badge-${ub.id}`,
+          type: 'badge_awarded',
+          title: ub.badge ? ub.badge.name : `Badge #${ub.badge_id}`,
+          desc: ub.badge ? ub.badge.description : '',
+          icon_url: ub.badge ? ub.badge.icon_url : null,
+          timestamp: awardedAt,
+        };
+      });
+
+      if (mounted) setRecentActivity(badgeActs);
+    } catch (err) {
+      console.error("Failed loading activity", err);
+    } finally {
+      if (mounted) setActivityLoading(false);
+    }
+  }
+
+  loadActivity();
+  return () => { mounted = false; };
+}, [profileUserId]);
+
+
   // ----------------------
   // Render
   // ----------------------
@@ -462,60 +557,163 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* Right Column */}
-          <div className="flex-1 flex flex-col gap-6">
-            {/* Tabs */}
-            <div className="flex gap-2 mb-3">
-              <button
-                onClick={() => setTab("badges")}
-                className={`px-5 py-1.5 rounded-xl font-medium text-sm cursor-pointer outline-none border transition 
-                  ${tab === "badges" ? "bg-white border-[1.5px] border-gray-900 shadow-sm" : "bg-gray-100 border-[1.5px] border-gray-200"}`}
-              >
-                Badges ({badges.length})
-              </button>
-              <button
-                onClick={() => setTab("activity")}
-                className={`px-5 py-1.5 rounded-xl font-medium text-sm cursor-pointer outline-none border transition 
-                  ${tab === "activity" ? "bg-white border-[1.5px] border-gray-900 shadow-sm" : "bg-gray-100 border-[1.5px] border-gray-200"}`}
-              >
-                Recent Activity
-              </button>
-            </div>
+{/* Right Column */}
+<div className="flex-1 flex flex-col gap-6">
+  {/* Tabs */}
+  <div className="flex gap-2 mb-3">
+    <button
+      onClick={() => setTab("badges")}
+      className={`px-5 py-1.5 rounded-xl font-medium text-sm cursor-pointer outline-none border transition 
+        ${tab === "badges" ? "bg-white border-[1.5px] border-gray-900 shadow-sm" : "bg-gray-100 border-[1.5px] border-gray-200"}`}
+    >
+      Badges ({badges.length})
+    </button>
+    <button
+      onClick={() => setTab("activity")}
+      className={`px-5 py-1.5 rounded-xl font-medium text-sm cursor-pointer outline-none border transition 
+        ${tab === "activity" ? "bg-white border-[1.5px] border-gray-900 shadow-sm" : "bg-gray-100 border-[1.5px] border-gray-200"}`}
+    >
+      Recent Activity
+    </button>
+  </div>
 
-            {/* Tab Content */}
-            {tab === "badges" ? (
-              <div className="flex flex-wrap gap-6">
-                {badges.map((badge, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-white rounded-2xl p-6 min-w-[260px] flex-1 shadow-md flex flex-col gap-2"
-                  >
-                    <div>
-                      {badge.icon_url ? (
-                        <img src={badge.icon_url} alt={badge.title} className="w-7 h-7" />
-                      ) : (
-                        // fallback to local icon set (by matching title)
-                        fallbackBadges[idx % fallbackBadges.length].icon
-                      )}
-                    </div>
-                    <div className="font-semibold text-lg">{badge.title}</div>
-                    <div className="text-gray-600 text-base">{badge.desc}</div>
-                    <div className="flex items-center text-gray-400 text-sm mt-1">
-                      <IoMdCalendar className="mr-1.5" />
-                      {badge.date}
-                    </div>
-                  </div>
-                ))}
-              </div>
+  {/* Tab Content */}
+  {tab === "badges" ? (
+    <div className="flex flex-wrap gap-6">
+      {badges.map((badge, idx) => (
+        <div
+          key={badge.id ?? `badge-${idx}`}
+          className="bg-white rounded-2xl p-6 min-w-[260px] flex-1 shadow-md flex flex-col gap-2"
+        >
+          <div className="flex items-center gap-3">
+            {badge.icon_url ? (
+              <img src={badge.icon_url} alt={badge.title} className="w-7 h-7 object-cover rounded" />
             ) : (
-              <div className="bg-white rounded-2xl p-8 text-gray-400 text-lg text-center shadow-md">
-                No recent activity yet.
-              </div>
+              // fallback to local icon set (match by title then by index)
+              (fallbackBadges.find((f) => f.title === badge.title)?.icon ||
+               fallbackBadges[idx % fallbackBadges.length].icon)
             )}
-
-            {loading && <div className="text-sm text-gray-500">Loading...</div>}
-            {error && <div className="text-sm text-red-500">{error}</div>}
+            <div>
+              <div className="font-semibold text-lg">{badge.title}</div>
+              <div className="text-gray-600 text-sm">{badge.desc}</div>
+            </div>
           </div>
+
+          <div className="flex items-center text-gray-400 text-sm mt-3">
+            <IoMdCalendar className="mr-1.5" />
+            <span>{badge.date || badge.awarded_at ? new Date(badge.date || badge.awarded_at).toLocaleDateString() : ""}</span>
+          </div>
+
+          {/* action row */}
+          <div className="mt-3 flex items-center gap-2">
+            {badge.badge_id ? (
+              <button
+                onClick={() => navigate(`/badges/${badge.badge_id}`)}
+                className="text-sm bg-gray-100 px-3 py-1 rounded-lg hover:bg-gray-200 transition"
+              >
+                View badge
+              </button>
+            ) : null}
+            {badge.user_badge_id ? (
+              <button
+                onClick={() => {/* optionally show a modal or navigate to a detailed profile badge view */}}
+                className="text-sm bg-gray-100 px-3 py-1 rounded-lg hover:bg-gray-200 transition"
+              >
+                Details
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div>
+      {activityLoading && <div className="text-sm text-gray-500 mb-4">Loading recent activity...</div>}
+
+      {!activityLoading && (!recentActivity || recentActivity.length === 0) ? (
+        <div className="bg-white rounded-2xl p-8 text-gray-400 text-lg text-center shadow-md">
+          No recent activity yet.
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {recentActivity.map((act, idx) => {
+            const type = act.type || "activity";
+            const ts = act.timestamp || act.time || act.created_at || act.date || null;
+            const when = ts ? new Date(ts).toLocaleString() : "";
+            const iconUrl = act.icon_url || (act.payload && act.payload.badge && act.payload.badge.icon_url) || (act.badge && act.badge.icon_url) || null;
+
+            // build friendly title & action
+            let title = act.title || "";
+            let subtitle = act.desc || "";
+            let action = null;
+
+            if (type === "badge_awarded") {
+              const b = act.payload?.badge || act.badge || act.raw?.badge;
+              title = b?.name || act.title || "Badge awarded";
+              subtitle = b?.description || subtitle;
+              if (b?.id) action = { label: "View badge", onClick: () => navigate(`/badges/${b.id}`) };
+            } else if (type === "goal_created") {
+              const g = act.payload || {};
+              title = `Created a goal: ${g.title || g.goal_title || `Goal #${g.goal_id || ""}`}`;
+              subtitle = g.title || subtitle;
+              if (g.goal_id) action = { label: "View goal", onClick: () => navigate(`/goals/${g.goal_id}`) };
+            } else if (type === "goal_completed") {
+              const g = act.payload || {};
+              title = `Completed: ${g.title || g.goal_title || `Goal #${g.goal_id || ""}`}`;
+              subtitle = g.title || subtitle;
+              if (g.goal_id) action = { label: "View goal", onClick: () => navigate(`/goals/${g.goal_id}`) };
+            } else if (type === "follow") {
+              const p = act.payload || {};
+              title = `New follower`;
+              subtitle = p.follower_name ? `${p.follower_name} followed a goal` : `User #${p.follower_id} followed a goal`;
+              if (p.follower_id) action = { label: "View user", onClick: () => navigate(`/users/${p.follower_id}`) };
+            } else {
+              title = title || act.payload?.title || "Activity";
+            }
+
+            const fallbackIcon = () => {
+              if (type === "badge_awarded") return <span className="text-xl">🏅</span>;
+              if (type === "goal_completed") return <span className="text-xl">✅</span>;
+              if (type === "goal_created") return <span className="text-xl">🎯</span>;
+              if (type === "follow") return <span className="text-xl">➕</span>;
+              return <span className="text-xl">•</span>;
+            };
+
+            return (
+              <div key={act.id ?? `act-${idx}`} className="bg-white rounded-2xl p-4 flex items-start gap-4 shadow-sm">
+                <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-gray-100">
+                  {iconUrl ? <img src={iconUrl} alt={title} className="w-10 h-10 object-cover rounded" /> : fallbackIcon()}
+                </div>
+
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">{title}</div>
+                  {subtitle && <div className="text-gray-600 text-sm">{subtitle}</div>}
+                </div>
+
+                <div className="flex flex-col items-end gap-2">
+                  <div className="text-gray-400 text-xs whitespace-nowrap">{when}</div>
+                  {action && (
+                    <button
+                      onClick={action.onClick}
+                      className="text-sm bg-gray-100 px-3 py-1 rounded-lg hover:bg-gray-200 transition"
+                    >
+                      {action.label}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  )}
+
+  {loading && <div className="text-sm text-gray-500">Loading...</div>}
+  {error && <div className="text-sm text-red-500">{error}</div>}
+</div>
+
+
         </div>
       </div>
                   <ToastContainer position="top-right" />

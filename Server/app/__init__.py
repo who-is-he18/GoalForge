@@ -1,6 +1,8 @@
 import os
 from dotenv import load_dotenv
 from flask import Flask, jsonify
+from flask import request, make_response
+
 from flask_restful import Api
 from flask_cors import CORS
 
@@ -32,6 +34,12 @@ def create_app():
     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
     expose_headers=["Content-Type", "Authorization"]
 )
+    @app.before_request
+    def handle_options():
+        if request.method == "OPTIONS":
+            # Return an empty 200 response immediately for preflights
+            resp = make_response("", 200)
+            return resp
 
     # initialize extensions
     db.init_app(app)

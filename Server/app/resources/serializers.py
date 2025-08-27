@@ -1,5 +1,7 @@
 from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
 from marshmallow_sqlalchemy.fields import Nested
+from marshmallow_sqlalchemy import SQLAlchemyAutoSchema, auto_field, fields
+
 
 from app.models import (
     User,
@@ -68,19 +70,29 @@ class CheerSchema(SQLAlchemyAutoSchema):
         load_instance = True
         include_fk = True
 
-# Badge model schema
 class BadgeSchema(SQLAlchemyAutoSchema):
     class Meta:
         model = Badge
-        load_instance = True
         include_fk = True
+        load_instance = True
 
-# UserBadge model schema
+    id = auto_field()
+    name = auto_field()
+    description = auto_field()
+    icon_url = auto_field()
+
 class UserBadgeSchema(SQLAlchemyAutoSchema):
+    badge = fields.Nested(BadgeSchema)  # include nested badge payload
+
     class Meta:
         model = UserBadge
-        load_instance = True
         include_fk = True
+        load_instance = True
+
+    id = auto_field()
+    user_id = auto_field()
+    badge_id = auto_field()
+    awarded_at = auto_field()
 
 # Follower model schema
 class FollowerSchema(SQLAlchemyAutoSchema):

@@ -5,8 +5,9 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const api = axios.create({
   baseURL: API_BASE,
   withCredentials: false, // set to true if backend uses cookies
+  // Don't set Content-Type globally (causes issues for GET w/ some Flask configs).
   headers: {
-    "Content-Type": "application/json",
+    Accept: "application/json",
   },
 });
 
