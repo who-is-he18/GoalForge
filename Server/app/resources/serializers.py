@@ -35,22 +35,24 @@ class UserSchema(SQLAlchemyAutoSchema):
             "following",
         )
 
-# Goal model schema
-class GoalSchema(SQLAlchemyAutoSchema):
-    user = Nested(UserSchema, only=("id", "username", "profile_pic"))  
-    # 👆 only include safe fields
-
-    class Meta:
-        model = Goal
-        load_instance = True
-        include_fk = True
-
 # GoalProgress model schema
 class GoalProgressSchema(SQLAlchemyAutoSchema):
     class Meta:
         model = GoalProgress
         load_instance = True
         include_fk = True
+
+# Goal model schema
+class GoalSchema(SQLAlchemyAutoSchema):
+    user = Nested(UserSchema, only=("id", "username", "profile_pic"))
+    progress_logs = Nested(GoalProgressSchema, many=True)  # Add this line
+    
+    class Meta:
+        model = Goal
+        load_instance = True
+        include_fk = True
+
+
 
 # Comment schema with nested user
 class CommentSchema(SQLAlchemyAutoSchema):

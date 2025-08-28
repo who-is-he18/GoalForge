@@ -56,6 +56,9 @@ class Goal(db.Model):
     longest_streak = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    is_completed = db.Column(db.Boolean, default=False, nullable=False)
+
+
     # Relationships
     progress_logs = db.relationship('GoalProgress', backref='goal', lazy=True)
     followers = db.relationship('Follower', backref='goal', lazy=True)

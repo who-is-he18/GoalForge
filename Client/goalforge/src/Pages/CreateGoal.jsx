@@ -24,6 +24,8 @@ export default function CreateGoalPage() {
   const [frequency, setFrequency] = useState("Daily");
   const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(""); 
+
   
 
   function handleBack() {
