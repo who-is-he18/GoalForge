@@ -80,6 +80,35 @@ const TAG_STYLES = {
 function tagClass(tag) {
   return TAG_STYLES[tag] || TAG_STYLES.default;
 }
+export function ResponsiveCover({ src, alt, className = "", fallback }) {
+  const [ratioPct, setRatioPct] = useState(56.25); // 16:9 default
+  useEffect(() => {
+    let cancelled = false;
+    if (!src) return;
+    const img = new Image();
+    img.src = src;
+    img.onload = () => {
+      if (cancelled) return;
+      const r = (img.height / img.width) * 100;
+      setRatioPct(r || 56.25);
+    };
+    return () => { cancelled = true; };
+  }, [src]);
+
+  if (!src) return fallback || <div className="text-gray-300">No image</div>;
+
+  return (
+    <div className={`w-full rounded-lg overflow-hidden bg-gray-100 border border-gray-200 ${className}`}>
+      <div style={{ width: "100%", paddingTop: `${ratioPct}%`, position: "relative" }}>
+        <img
+          src={src}
+          alt={alt}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function GoalForgeHome() {
   const navigate = useNavigate();
@@ -164,12 +193,13 @@ const normalizeComment = (c) => ({
       totalDays: apiGoal.longest_streak || 0,
 
       image:
-        apiGoal.image ||
+        apiGoal.image_url ||
         "https://i.pinimg.com/1200x/80/7f/b5/807fb5c3c5efb50dd303ae17e242ac96.jpg",
 
       progress_logs: apiGoal.progress_logs || [],
     };
   }
+  
 
   // ---------- Fetch goals ----------
   const fetchGoals = useCallback(async () => {
@@ -1049,21 +1079,10 @@ useEffect(() => {
 
                   <p className="mt-4 text-black leading-relaxed">{g.description}</p>
 
-                 {/* Goal Image: fits neatly inside the card */}
-<div className="mt-4">
-  <div className="w-full rounded-lg overflow-hidden bg-white border border-gray-200 h-40 sm:h-56 md:h-50 flex items-center justify-center">
-    {g.image ? (
-      <img
-        src={g.image}
-        alt={g.title}
-        className="max-h-170 max-w-full object-contain rounded-md"
-        style={{ objectPosition: "center" }}
-      />
-    ) : (
-      <span className="text-gray-300">No image available</span>
-    )}
-  </div>
-</div>
+<ResponsiveCover src={g.image} alt={g.title} className="h-auto" />
+
+
+
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="bg-gray-50 border border-gray-100 rounded-md px-4 py-2 text-sm text-black inline-flex items-center">

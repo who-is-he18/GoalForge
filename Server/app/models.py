@@ -57,6 +57,8 @@ class Goal(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     is_completed = db.Column(db.Boolean, default=False, nullable=False)
+    image_url = db.Column(db.String, nullable=True)
+
 
 
     # Relationships

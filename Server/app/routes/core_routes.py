@@ -2,7 +2,11 @@
 
 from flask_restful import Resource, reqparse
 from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
-from flask import request, current_app , make_response
+from flask import request, current_app , make_response, url_for
+from werkzeug.utils import secure_filename
+import os
+import uuid
+
 from app.models import (
     User, Goal, GoalProgress, Comment, Cheer,
     Badge, UserBadge, Follower, Notification
@@ -35,6 +39,12 @@ follower_schema = FollowerSchema()           # Single follower
 followers_schema = FollowerSchema(many=True) # Multiple followers
 notification_schema = NotificationSchema()   # Single notification
 notifications_schema = NotificationSchema(many=True) # Multiple notifications
+
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 # ------------------- User Resources -------------------
 
@@ -83,23 +93,71 @@ class GoalListResource(Resource):
 
     @jwt_required()
     def post(self):
+        """
+        Accepts multipart/form-data or application/json.
+        If an 'image' file is present, saves it to UPLOAD_FOLDER and sets image_url.
+        """
         user_id = get_jwt_identity()
-        data = request.get_json()
 
-        # Parse date strings into datetime.date objects
-        start_date = datetime.strptime(data.get("start_date"), "%Y-%m-%d").date() if data.get("start_date") else None
-        end_date = datetime.strptime(data.get("end_date"), "%Y-%m-%d").date() if data.get("end_date") else None
+        # If Content-Type is multipart/form-data, fields will be in request.form and files in request.files.
+        if request.content_type and request.content_type.startswith("multipart/form-data"):
+            data = request.form
+        else:
+            data = request.get_json() or {}
+
+        title = data.get("title")
+        if not title:
+            return {"message": "title is required"}, 400
+
+        # parse dates if present
+        def parse_date(s):
+            if not s:
+                return None
+            try:
+                return datetime.strptime(s, "%Y-%m-%d").date()
+            except Exception:
+                return None
+
+        start_date = parse_date(data.get("start_date"))
+        end_date = parse_date(data.get("end_date"))
+
+        # handle image file
+        image_url = None
+        upload_folder = current_app.config.get("UPLOAD_FOLDER") or os.path.join(current_app.static_folder or "static", "uploads")
+        os.makedirs(upload_folder, exist_ok=True)
+
+        file = request.files.get("image")
+        if file and file.filename:
+            if not allowed_file(file.filename):
+                return {"message": "Unsupported image type"}, 400
+            # generate safe unique filename
+            filename = secure_filename(file.filename)
+            filename = f"{uuid.uuid4().hex}_{filename}"
+            save_path = os.path.join(upload_folder, filename)
+            file.save(save_path)
+            # construct public URL to static/uploads/<filename>
+            # assumes upload_folder is <app.static_folder>/uploads
+            # Use url_for to build absolute path
+            try:
+                # path relative to static folder
+                rel_path = os.path.relpath(save_path, current_app.static_folder)
+                image_url = url_for("static", filename=rel_path.replace("\\", "/"), _external=True)
+            except Exception:
+                # fallback: build from request.host_url
+                image_url = f"{request.host_url.rstrip('/')}/static/uploads/{filename}"
 
         goal = Goal(
             user_id=user_id,
-            title=data["title"],
+            title=title,
             description=data.get("description"),
-            category=data.get("category"),
-            start_date=start_date,
+            category=data.get("category") or "General",
+            start_date=start_date or datetime.utcnow().date(),
             end_date=end_date,
-            frequency=data.get("frequency"),
-            is_public=data.get("is_public", True),
+            frequency=(data.get("frequency") or "daily").lower(),
+            is_public=(data.get("is_public") in [True, "true", "1", "True"]),
+            image_url=image_url
         )
+
         db.session.add(goal)
         db.session.commit()
         return goal_schema.dump(goal), 201
@@ -135,47 +193,27 @@ class GoalResource(Resource):
         return g, 200
 
     @jwt_required()
-    def put(self, goal_id):
-        goal = Goal.query.get_or_404(goal_id)
-        parser = reqparse.RequestParser()
-        parser.add_argument('title')
-        parser.add_argument('description')
-        parser.add_argument('category')
-        parser.add_argument('start_date')
-        parser.add_argument('end_date')
-        parser.add_argument('frequency')
-        parser.add_argument('is_public', type=bool)
-        args = parser.parse_args()
-
-        # Update only provided fields
-        for attr, value in args.items():
-            if value is not None:
-                setattr(goal, attr, value)
-
-        db.session.commit()
-        return goal_schema.dump(goal), 200
-    
-    @jwt_required()
     def patch(self, goal_id):
-        """
-        Partial update — accept JSON payload and update only provided fields.
-        Handles parsing of date strings for start_date/end_date.
-        """
         goal = Goal.query.get_or_404(goal_id)
-        data = request.get_json() or {}
+        data = {}
 
-        # helper to parse date strings (expects 'YYYY-MM-DD')
+    # If multipart/form-data, use request.form ; otherwise JSON
+        if request.content_type and request.content_type.startswith("multipart/form-data"):
+            data = request.form.to_dict()
+        else:
+            data = request.get_json() or {}
+
+    # parse date helper (same as before)
         def parse_date_if_present(key):
             val = data.get(key, None)
             if val in (None, ""):
-                return None if val is None else None  # treat empty string as None (optional)
+                return None if val is None else None
             try:
                 return datetime.strptime(val, "%Y-%m-%d").date()
             except Exception:
-                # you can choose to raise a 400 here; for now we'll ignore invalid date formats
                 return None
 
-        # Map incoming fields to model attributes
+    # Update standard fields
         if "title" in data:
             goal.title = data.get("title")
         if "description" in data:
@@ -185,20 +223,75 @@ class GoalResource(Resource):
         if "frequency" in data:
             goal.frequency = data.get("frequency")
         if "is_public" in data:
-            # ensure boolean conversion
-            goal.is_public = bool(data.get("is_public"))
+            goal.is_public = str(data.get("is_public")).lower() in ("true", "1", "t", "yes")
+
         if "start_date" in data:
             parsed = parse_date_if_present("start_date")
             if parsed is not None:
                 goal.start_date = parsed
         if "end_date" in data:
             parsed = parse_date_if_present("end_date")
-            # allow explicitly setting end_date to null/empty to remove it
+        # allow explicitly setting end_date to null/empty to remove it
             goal.end_date = parsed
 
-        # add any other allowed fields you want to support (status etc.)
+    # ----- Image handling -----
+        upload_folder = current_app.config.get("UPLOAD_FOLDER")
+        allowed = current_app.config.get("ALLOWED_IMAGE_EXTENSIONS", {"png","jpg","jpeg","gif","webp"})
+
+    # 1) If remove_image flag is present and truthy -> delete current image and clear URL
+        remove_image_flag = data.get("remove_image") or request.form.get("remove_image") if request.form else None
+        if remove_image_flag and str(remove_image_flag) not in ("", "0", "false", "False"):
+        # attempt to remove local file (if it exists and sits in our static/uploads dir)
+            try:
+                if goal.image_url:
+                # derive local path from url by removing host + /static/
+                    static_folder = current_app.static_folder
+                # assume image_url is like https://host/static/uploads/filename
+                    rel = None
+                    if goal.image_url and "/static/" in goal.image_url:
+                        rel = goal.image_url.split("/static/")[-1]
+                    if rel:
+                        path = os.path.join(static_folder, rel)
+                        if os.path.exists(path):
+                            os.remove(path)
+            except Exception:
+                current_app.logger.exception("Failed to delete old goal image")
+            goal.image_url = None
+
+    # 2) If an image file provided in request.files -> save and set image_url
+        file = request.files.get("image")
+        if file and file.filename:
+        # basic extension check
+            ext = file.filename.rsplit(".", 1)[-1].lower()
+            if ext not in allowed:
+                return {"message": "Unsupported image type"}, 400
+
+        # remove previous local image (optional)
+            try:
+                if goal.image_url and "/static/" in goal.image_url:
+                    rel = goal.image_url.split("/static/")[-1]
+                    old_path = os.path.join(current_app.static_folder, rel)
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+            except Exception:
+                current_app.logger.exception("Failed to delete old goal image before saving new one")
+
+        # save new file with safe, unique name
+            filename = secure_filename(file.filename)
+            filename = f"{uuid.uuid4().hex}_{filename}"
+            dest = os.path.join(upload_folder, filename)
+            os.makedirs(upload_folder, exist_ok=True)
+            file.save(dest)
+        # build url
+            try:
+                rel_path = os.path.relpath(dest, current_app.static_folder)
+                goal.image_url = url_for("static", filename=rel_path.replace("\\", "/"), _external=True)
+            except Exception:
+                goal.image_url = f"{request.host_url.rstrip('/')}/static/uploads/{filename}"
+
         db.session.commit()
         return goal_schema.dump(goal), 200
+
 
     @jwt_required()
     def delete(self, goal_id):

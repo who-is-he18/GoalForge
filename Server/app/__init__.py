@@ -10,12 +10,15 @@ from flask_cors import CORS
 from app.extensions import db, migrate, jwt
 from app.models import TokenBlocklist  # token revocation model
 
+
 def create_app():
     load_dotenv()
 
+    # create Flask app
     app = Flask(__name__, instance_relative_config=False)
 
-    # Basic config (override with environment variables)
+    # ----- Basic config (override with environment variables) -----
+    # Database & JWT
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///goalforge.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "super-secret-key")
@@ -23,17 +26,42 @@ def create_app():
     app.config["JWT_BLACKLIST_ENABLED"] = True
     app.config["JWT_BLACKLIST_TOKEN_CHECKS"] = ["access", "refresh"]
 
+    # ----- Static & uploads -----
+    # allow overriding static folder and upload location via env vars
+    static_folder = os.getenv("STATIC_FOLDER") or os.path.join(app.root_path, "static")
+    upload_folder = os.getenv("UPLOAD_FOLDER") or os.path.join(static_folder, "uploads")
+
+    # maximum request body size (default 5MB)
+    try:
+        app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MAX_CONTENT_LENGTH", 5 * 1024 * 1024))
+    except Exception:
+        app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
+
+    app.config["STATIC_FOLDER"] = static_folder
+    app.config["UPLOAD_FOLDER"] = upload_folder
+    # allowed image extensions (helper for upload handling)
+    app.config["ALLOWED_IMAGE_EXTENSIONS"] = {"png", "jpg", "jpeg", "gif", "webp"}
+
+    # ensure static and upload directories exist
+    try:
+        os.makedirs(app.config["STATIC_FOLDER"], exist_ok=True)
+        os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+    except Exception:
+        # don't raise here; just log if needed later
+        pass
+
     # CORS: allow the Vite/react dev server by default (change in production)
     # FRONTEND_ORIGINS can be comma-separated list like "http://localhost:5173,http://localhost:3000"
     origins = os.getenv("FRONTEND_ORIGINS", "http://localhost:5173").split(",")
     CORS(
-    app,
-    resources={r"/api/*": {"origins": origins}},
-    supports_credentials=True,
-    methods=["GET", "HEAD", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"],
-    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
-    expose_headers=["Content-Type", "Authorization"]
-)
+        app,
+        resources={r"/api/*": {"origins": origins}},
+        supports_credentials=True,
+        methods=["GET", "HEAD", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"],
+        allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+        expose_headers=["Content-Type", "Authorization"],
+    )
+
     @app.before_request
     def handle_options():
         if request.method == "OPTIONS":

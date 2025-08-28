@@ -310,7 +310,7 @@ const tryFetchBadges = async () => {
       // Inside handleLogin success case:
       toast.success("Profile Updated Successfully");
       setTimeout(() => {
-        navigate("/my-goals");
+        navigate("/profile");
       }, 1000); // Short delay to allow toast to render
     } catch (err) {
       console.error(err);

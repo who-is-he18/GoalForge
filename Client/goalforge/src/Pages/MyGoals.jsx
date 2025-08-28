@@ -7,6 +7,8 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 
+
+
 /* ---------- Icons ---------- */
 const PlusIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -41,8 +43,11 @@ function EditGoalModal({ open, onClose, goal, onSave }) {
     isPublic: false,
     status: "active",
   }));
+  const [imageFile, setImageFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [removeImage, setRemoveImage] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (open && goal) {
       setForm({
         title: goal.title || "",
@@ -54,20 +59,39 @@ function EditGoalModal({ open, onClose, goal, onSave }) {
         isPublic: !!goal.isPublic,
         status: goal.status || "active",
       });
+      setPreviewUrl(goal.image_url || null);
+      setImageFile(null);
+      setRemoveImage(false);
     }
   }, [open, goal]);
 
   if (!open) return null;
+
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
     setForm((s) => ({ ...s, [name]: type === "checkbox" ? checked : value }));
   }
 
+  function onPickFile(e) {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    setImageFile(f);
+    setRemoveImage(false);
+    const url = URL.createObjectURL(f);
+    setPreviewUrl(url);
+  }
+
+  function handleRemoveImageToggle() {
+    setImageFile(null);
+    setPreviewUrl(null);
+    setRemoveImage((s) => !s);
+  }
   function handleSubmit(e) {
     e.preventDefault();
     const updated = { ...goal, ...form };
-    onSave(updated);
+    // Pass imageFile and removeImage flag to parent so parent can decide FormData vs JSON
+    onSave(updated, imageFile, removeImage);
   }
 
   return (
@@ -83,6 +107,7 @@ function EditGoalModal({ open, onClose, goal, onSave }) {
 
         <form onSubmit={handleSubmit} className="px-6 py-5 max-h-[80vh] overflow-auto">
           <div className="grid grid-cols-1 gap-4">
+            
             <div>
               <label className="text-sm font-bold block mb-1">Goal Title *</label>
               <input name="title" value={form.title} onChange={handleChange} className="w-full rounded-md px-3 py-2 bg-gray-100 focus:border-gray-500 focus:ring-0" required />
@@ -134,6 +159,27 @@ function EditGoalModal({ open, onClose, goal, onSave }) {
               </label>
             </div>
           </div>
+            <div className="mt-4">
+                        <label className="text-sm font-bold block mb-1">Cover image</label>
+              <div className="flex items-center gap-3">
+                <label className="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg cursor-pointer bg-white text-sm">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <span>{imageFile ? imageFile.name : (previewUrl ? "Change image" : "Choose image")}</span>
+                  <input type="file" accept="image/*" onChange={onPickFile} className="hidden" />
+                </label>
+
+                <button type="button" onClick={handleRemoveImageToggle} className={`px-3 py-2 rounded-md border ${removeImage ? 'bg-red-50 border-red-300 text-red-600' : 'bg-white'}`}>
+                  {removeImage ? "Will remove" : (previewUrl ? "Remove" : "No image")}
+                </button>
+
+                {previewUrl && (
+                  <div className="w-28 h-20 rounded-md overflow-hidden border border-gray-100">
+                    <img src={previewUrl} alt="preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
+              <div className="text-xs text-gray-400 mt-2">Replace or remove the image. Max 5MB.</div>
+            </div>
 
           <div className="mt-6 flex items-center justify-end gap-3 border-t pt-4">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-md bg-white border border-gray-300 text-sm font-bold">Cancel</button>
@@ -230,6 +276,7 @@ function normalizeGoal(apiGoal) {
     progress: apiGoal.progress_percent ?? apiGoal.progress ?? 0,
     user_id: apiGoal.user?.id ?? apiGoal.user_id,
     raw: apiGoal,
+    image: apiGoal.image_url || "https://i.pinimg.com/1200x/80/7f/b5/807fb5c3c5efb50dd303ae17e242ac96.jpg",  
   };
 }
 
@@ -577,56 +624,55 @@ async function handleDelete(goalId) {
   );
 }
 
-
-async function handleSave(updatedGoal) {
-  setIsSaving(true);
+// parent component scope
+async function handleSave(updatedGoal, imageFile, removeImage) {
   try {
-    const payload = {
-      title: updatedGoal.title,
-      description: updatedGoal.description,
-      category: updatedGoal.category,
-      start_date: updatedGoal.start_date,
-      end_date: updatedGoal.end_date,
-      frequency: updatedGoal.frequency,
-      is_public: !!updatedGoal.isPublic,
-      status: updatedGoal.status,
-    };
-    const res = await api.patch(`/goals/${updatedGoal.id}`, payload);
-    const saved = normalizeGoal(res.data || { ...updatedGoal, is_public: payload.is_public });
+    // If we need to upload image or remove image, use FormData (multipart)
+    if (imageFile || removeImage) {
+      const fd = new FormData();
+      fd.append("title", updatedGoal.title);
+      fd.append("description", updatedGoal.description || "");
+      fd.append("category", updatedGoal.category || "");
+      fd.append("start_date", updatedGoal.start_date || "");
+      fd.append("end_date", updatedGoal.end_date || "");
+      fd.append("frequency", updatedGoal.frequency || "");
+      fd.append("is_public", updatedGoal.isPublic ? "true" : "false");
 
-    // Merge saved with existing computed fields so progress/xp don't disappear
-    setGoals((prev) =>
-      prev.map((g) => {
-        if (g.id !== saved.id) return g;
-        return {
-          ...g,           // keep existing computed props by default
-          ...saved,       // overwrite with server-sent fields
-          progress: g.progress ?? saved.progress ?? 0,
-          xp: g.xp ?? saved.xp ?? 0,
-          progress_logs: g.progress_logs ?? saved.progress_logs ?? [],
-        };
-      })
-    );
+      if (imageFile) fd.append("image", imageFile);
+      if (removeImage) fd.append("remove_image", "1");
+
+      const res = await api.patch(`/goals/${updatedGoal.id}`, fd);
+      const fresh = res.data;
+      setGoals((prev) => prev.map((g) => (g.id === fresh.id ? fresh : g)));
+    } else {
+      // simple JSON patch (no file)
+      const payload = {
+        title: updatedGoal.title,
+        description: updatedGoal.description,
+        category: updatedGoal.category,
+        start_date: updatedGoal.start_date,
+        end_date: updatedGoal.end_date || null,
+        frequency: updatedGoal.frequency,
+        is_public: !!updatedGoal.isPublic,
+      };
+      const res = await api.patch(`/goals/${updatedGoal.id}`, payload);
+      const fresh = res.data;
+      setGoals((prev) => prev.map((g) => (g.id === fresh.id ? fresh : g)));
+    }
 
     setModalOpen(false);
     setEditingGoal(null);
-// Inside handleLogin success case:
-toast.success("Goal updated successfully");
-setTimeout(() => {
-  navigate("/my-goals");
-}, 1000); // Short delay to allow toast to render
-    } catch (err) {
-      console.error(err);
-      let msg = "Goal update failed. Please try again.";
-      if (err.response && err.response.data) {
-        msg = err.response.data.message || err.response.data.error || JSON.stringify(err.response.data);
-      }
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
+
+    // 🔄 Force immediate page refresh
+    window.location.reload();
+
+  } catch (err) {
+    console.error("Failed to save goal", err);
+    toast.error("Failed to save changes");
+  }
+}
+
+
 useEffect(() => {
   let mounted = true;
 
@@ -738,7 +784,17 @@ useEffect(() => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {visibleGoals.map((g) => (
-            <div key={g.id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+<div key={g.id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">  {/* Image hero */}
+  <div className="w-full h-40 bg-gray-100">
+    {g.image ? (
+      <img src={g.image} alt={g.title} className="w-full h-full object-cover" />
+    ) : (
+      <div className="w-full h-full flex items-center justify-center text-gray-300">No image</div>
+    )}
+  </div>
+  <br>
+  </br>
+
               <div className="flex items-start justify-between">
                 <div className="pr-4 flex-1">
                   <div className="flex items-center gap-3">

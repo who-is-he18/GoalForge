@@ -306,6 +306,8 @@ export default function ViewGoal() {
                 <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-2xl font-semibold text-gray-600">
                   {goal.title?.[0] || "G"}
                 </div>
+
+
                 <div className="flex-1">
                   <h2 className="text-xl font-semibold">{goal.title}</h2>
                   <div className="text-sm text-gray-500 mt-1">{goal.category} • {goal.frequency}</div>
@@ -366,6 +368,12 @@ export default function ViewGoal() {
               </div>
               <div className="text-sm text-gray-500">Recent updates</div>
             </div>
+                            {/* Hero Image */}
+{goal.image_url && (
+  <div className="w-full h-56 sm:h-80 bg-gray-100 overflow-hidden rounded-b-lg">
+    <img src={goal.image_url} alt={goal.title} className="w-full h-full object-cover" />
+  </div>
+)}
 
             {/* Progress logs */}
             <div className="space-y-4">
