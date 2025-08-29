@@ -344,22 +344,98 @@ class GoalProgressListResource(Resource):
 
     @jwt_required()
     def post(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('goal_id', type=int, required=True)
-        parser.add_argument('date', required=True)
-        parser.add_argument('note')
-        parser.add_argument('media_url')
-        parser.add_argument('xp_earned', type=int, default=10)
-        args = parser.parse_args()
+        """
+        Accept either JSON (application/json) or multipart/form-data with an uploaded file.
+        When a file is provided, it will be saved to UPLOAD_FOLDER and media_url will be set.
+        Expected fields:
+          - goal_id (int) [required]
+          - date (YYYY-MM-DD) [required]
+          - note (string, optional)
+          - xp_earned (int, optional)
+          - file (file upload, optional)  <-- field name 'file' for FormData
+        """
+        # Helper: parse incoming fields depending on content type
+        is_multipart = request.content_type and request.content_type.startswith("multipart/form-data")
 
-        date_obj = datetime.strptime(args['date'], "%Y-%m-%d").date()
+        # read fields
+        if is_multipart:
+            # form fields are strings in request.form
+            form = request.form
+            try:
+                goal_id = int(form.get("goal_id"))
+            except (TypeError, ValueError):
+                return {"message": "goal_id is required and must be an integer"}, 400
+            date_str = form.get("date")
+            note = form.get("note")
+            xp_earned = form.get("xp_earned")
+            try:
+                xp_earned = int(xp_earned) if xp_earned is not None and xp_earned != "" else 10
+            except Exception:
+                xp_earned = 10
+        else:
+            # JSON path (existing behaviour)
+            data = request.get_json() or {}
+            goal_id = data.get("goal_id")
+            date_str = data.get("date")
+            note = data.get("note")
+            xp_earned = data.get("xp_earned", 10)
+            if goal_id is None:
+                return {"message": "goal_id is required"}, 400
 
+        # validate date
+        try:
+            date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except Exception:
+            return {"message": "Invalid or missing 'date' (expected YYYY-MM-DD)"}, 400
+
+        # handle file upload if present
+        media_url = None
+        if is_multipart and "file" in request.files:
+            file = request.files.get("file")
+            if file and file.filename:
+                # basic extension guard
+                allowed = current_app.config.get("ALLOWED_IMAGE_EXTENSIONS", {"png", "jpg", "jpeg", "gif", "webp"})
+                filename = secure_filename(file.filename)
+                ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+                if ext not in allowed:
+                    return {"message": "Unsupported file type"}, 400
+
+                # optional: enforce file size limit (MAX_CONTENT_LENGTH is also enforced by Flask)
+                max_bytes = current_app.config.get("MAX_CONTENT_LENGTH", 10 * 1024 * 1024)
+                # If flask MAX_CONTENT_LENGTH is enabled, too-large uploads will already raise an error.
+                # But check here as well if you want a custom message:
+                file.seek(0, os.SEEK_END)
+                fsize = file.tell()
+                file.seek(0)
+                if fsize > max_bytes:
+                    return {"message": f"File is too large (max {max_bytes} bytes)"}, 400
+
+                # save file
+                upload_folder = current_app.config.get("UPLOAD_FOLDER") or os.path.join(current_app.static_folder or "static", "uploads")
+                os.makedirs(upload_folder, exist_ok=True)
+                unique_name = f"{uuid.uuid4().hex}_{filename}"
+                dest = os.path.join(upload_folder, unique_name)
+                try:
+                    file.save(dest)
+                except Exception as exc:
+                    current_app.logger.exception("Failed to save uploaded file: %s", exc)
+                    return {"message": "Failed to save uploaded file"}, 500
+
+                # derive public URL (assumes upload folder is under static/)
+                try:
+                    rel_path = os.path.relpath(dest, current_app.static_folder)
+                    media_url = url_for("static", filename=rel_path.replace("\\", "/"), _external=True)
+                except Exception:
+                    # fallback: construct URL under /static/uploads/
+                    media_url = f"{request.host_url.rstrip('/')}/static/uploads/{unique_name}"
+
+        # create progress record
         progress = GoalProgress(
-            goal_id=args['goal_id'],
+            goal_id=goal_id,
             date=date_obj,
-            note=args['note'],
-            media_url=args['media_url'],
-            xp_earned=args['xp_earned']
+            note=note,
+            media_url=media_url,      # if None, leave as-is
+            xp_earned=int(xp_earned or 10)
         )
 
         db.session.add(progress)
@@ -383,6 +459,7 @@ class GoalProgressListResource(Resource):
             "progress": progress_single_schema.dump(progress),
             "goal": goal_schema.dump(goal) if goal else None
         }, 201
+
 
     def check_and_award_badges_for_progress(self, user_id, goal, date_obj):
         """Check and award badges related to logging progress."""

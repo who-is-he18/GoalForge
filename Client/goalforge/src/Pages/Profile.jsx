@@ -6,8 +6,6 @@ import api from "../api";
 import { ToastContainer, toast } from 'react-toastify';
 import { useNavigate } from "react-router-dom";
 
-
-
 // Local UI fallback badges (keeps your existing UI when backend badges are missing)
 const fallbackBadges = [
   {
