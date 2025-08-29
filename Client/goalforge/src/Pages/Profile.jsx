@@ -603,24 +603,7 @@ useEffect(() => {
           </div>
 
           {/* action row */}
-          <div className="mt-3 flex items-center gap-2">
-            {badge.badge_id ? (
-              <button
-                onClick={() => navigate(`/badges/${badge.badge_id}`)}
-                className="text-sm bg-gray-100 px-3 py-1 rounded-lg hover:bg-gray-200 transition"
-              >
-                View badge
-              </button>
-            ) : null}
-            {badge.user_badge_id ? (
-              <button
-                onClick={() => {/* optionally show a modal or navigate to a detailed profile badge view */}}
-                className="text-sm bg-gray-100 px-3 py-1 rounded-lg hover:bg-gray-200 transition"
-              >
-                Details
-              </button>
-            ) : null}
-          </div>
+         
         </div>
       ))}
     </div>
@@ -649,17 +632,20 @@ useEffect(() => {
               const b = act.payload?.badge || act.badge || act.raw?.badge;
               title = b?.name || act.title || "Badge awarded";
               subtitle = b?.description || subtitle;
-              if (b?.id) action = { label: "View badge", onClick: () => navigate(`/badges/${b.id}`) };
-            } else if (type === "goal_created") {
+               ;
+            }  if (type === "goal_created") {
               const g = act.payload || {};
               title = `Created a goal: ${g.title || g.goal_title || `Goal #${g.goal_id || ""}`}`;
               subtitle = g.title || subtitle;
-              if (g.goal_id) action = { label: "View goal", onClick: () => navigate(`/goals/${g.goal_id}`) };
+              if (g.goal_id) action = { label: "View goal", onClick: () => navigate("/my-goals") };
             } else if (type === "goal_completed") {
               const g = act.payload || {};
               title = `Completed: ${g.title || g.goal_title || `Goal #${g.goal_id || ""}`}`;
               subtitle = g.title || subtitle;
-              if (g.goal_id) action = { label: "View goal", onClick: () => navigate(`/goals/${g.goal_id}`) };
+              if (g.goal_id) action = {
+                label: "View goal",
+                onClick: () => navigate("/my-goals"),
+              };
             } else if (type === "follow") {
               const p = act.payload || {};
               title = `New follower`;
