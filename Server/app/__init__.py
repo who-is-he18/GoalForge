@@ -89,8 +89,13 @@ def create_app():
     def health():
         return jsonify(status="ok", service="goalforge-api")
 
-    # register API resources
+        # register API resources
     from .routes import register_routes
     register_routes(api)
 
+    # Ensure tables exist when starting with SQLite
+    with app.app_context():
+        db.create_all()
+
     return app
+
