@@ -182,7 +182,7 @@ export default function LogProgress() {
         // navigate to the goal view if you have it, otherwise my-goals
         // prefer /goals/:id if you have that route
         if (window.location.pathname.includes("/log-progress")) {
-          navigate(`/goals/${goalId}`);
+          navigate("/my-goals");
         } else {
           navigate("/my-goals");
         }
