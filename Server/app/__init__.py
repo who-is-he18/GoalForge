@@ -96,6 +96,12 @@ def create_app():
     # Ensure tables exist when starting with SQLite
     with app.app_context():
         db.create_all()
+    # Seed dummy data
+        try:
+            from seed import seed_data
+            seed_data()
+        except Exception as e:
+            print(f"⚠️ Seeding failed: {e}")
 
     return app
 
