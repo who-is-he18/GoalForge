@@ -19,7 +19,7 @@ def create_app():
 
     # ----- Basic config (override with environment variables) -----
     # Database & JWT
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///goalforge.db")
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///instance/goalforge.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "super-secret-key")
     # Keep blacklist checks enabled (adjust to your auth design)

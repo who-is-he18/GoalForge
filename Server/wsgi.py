@@ -1,7 +1,7 @@
 # Server/wsgi.py
-# Simple WSGI entrypoint for Gunicorn / Render
+# WSGI entrypoint used by gunicorn / Render
 
 from app import create_app
 
-# Create the Flask app once on cold start
+# create the Flask app once per process
 app = create_app()
