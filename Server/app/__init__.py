@@ -50,17 +50,15 @@ def create_app():
         # don't raise here; just log if needed later
         pass
 
-    # CORS: allow the Vite/react dev server by default (change in production)
-    # FRONTEND_ORIGINS can be comma-separated list like "http://localhost:5173,http://localhost:3000"
-    origins = os.getenv("FRONTEND_ORIGINS", "http://localhost:5173").split(",")
     CORS(
         app,
-        resources={r"/api/*": {"origins": origins}},
+        resources={r"/api/*": {"origins": "*"}},
         supports_credentials=True,
         methods=["GET", "HEAD", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"],
         allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
         expose_headers=["Content-Type", "Authorization"],
     )
+
 
     @app.before_request
     def handle_options():
